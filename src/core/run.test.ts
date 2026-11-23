@@ -27,7 +27,7 @@ import {
   UNUSED_CAST_GOLD,
 } from "../data/tuning";
 
-const loadout: Loadout = [crackedStaff, fire, pierce, null, null];
+const loadout: Loadout = [crackedStaff, pierce, null, null, null];
 const deck = createStartingDeck();
 
 describe("stageClearGold", () => {
@@ -194,9 +194,9 @@ describe("placeCard", () => {
   });
 
   it("replaces the card in a slot and reports it", () => {
-    const result = placeCard(loadout, MODIFIERS[1]!, 2, 3);
+    const result = placeCard(loadout, MODIFIERS[1]!, 1, 3);
 
-    expect(result.loadout[2]).toBe(MODIFIERS[1]);
+    expect(result.loadout[1]).toBe(MODIFIERS[1]);
     expect(result.replaced).toBe(pierce);
   });
 
@@ -212,6 +212,10 @@ describe("placeCard", () => {
     expect(() => placeCard(loadout, pierce, 3, 3)).toThrow();
     expect(() => placeCard(loadout, pierce, -1, 3)).toThrow();
     expect(() => placeCard(loadout, pierce, 0.5, 3)).toThrow();
+  });
+
+  it("does not allow elements to be placed in the loadout", () => {
+    expect(() => placeCard(loadout, fire, 0, 3)).toThrow();
   });
 });
 

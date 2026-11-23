@@ -8,6 +8,7 @@ import {
   releaseCast,
   shouldAutoRelease,
 } from "../core/round";
+import { pickRandom, randomInteger } from "../core/rng";
 import { describeRule, getChannelRules } from "../core/rules";
 import {
   applyDeckReward,
@@ -25,6 +26,7 @@ import type {
   ChannelRules,
   Loadout,
   StageConfig,
+  StageSetup,
   StageState,
   TraceStep,
 } from "../core/types";
@@ -32,17 +34,19 @@ import { ELEMENTS } from "../data/cards/elements";
 import { ITEMS } from "../data/cards/items";
 import { MODIFIERS } from "../data/cards/modifiers";
 import { createStartingDeck } from "../data/channel-deck";
-import { ROUND_ONE } from "../data/stages/rounds";
+import { BOSS_RULES } from "../data/stages/bosses";
+import { ROUND_STAGES } from "../data/stages/rounds";
 import {
   DEFAULT_CHANNEL_RULES,
+  SELL_CARD_PRICE,
   SKIP_REWARD_GOLD,
   STARTING_UNLOCKED_SLOTS,
 } from "../data/tuning";
 
 // "pick": choosing the starting element, "stage": playing a stage,
 // "reward": picking a reward after a stage, "shop": spending gold before the next stage,
-// "won": the boss is down, "lost": a stage was failed
-export type Phase = "pick" | "stage" | "reward" | "shop" | "won" | "lost";
+// "lost": a stage was failed
+export type Phase = "pick" | "stage" | "reward" | "shop" | "lost";
 
 // a card the player has taken (or is buying) and still has to place in a slot
 export type PendingCard = {
@@ -56,7 +60,9 @@ export type Game = {
   phase: Phase;
   startSeed: number;             // shown in the UI so a run can be repeated
   seed: number;                  // RNG state outside of a stage
-  stageIndex: number;            // index into ROUND_ONE
+  roundNumber: number;           // current wave number, starting at 1
+  stageIndex: number;            // index into ROUND_STAGES
+  element: Card | null;          // immutable for the run, outside the loadout
   loadout: Loadout;
   unlockedSlots: number;
   deck: ChannelCard[];           // the run's channel deck; each stage starts from it
@@ -76,7 +82,9 @@ export function createGame(seed: number): Game {
     phase: "pick",
     startSeed: seed,
     seed,
+    roundNumber: 1,
     stageIndex: 0,
+    element: null,
     loadout: [null, null, null, null, null],
     unlockedSlots: STARTING_UNLOCKED_SLOTS,
     deck: createStartingDeck(),
@@ -92,12 +100,14 @@ export function createGame(seed: number): Game {
 
 // the channel rules in effect right now (loadout + stage rule)
 export function rulesFor(game: Game): ChannelRules {
-  return game.stage ? getChannelRules(game.loadout, game.stage.rule) : DEFAULT_CHANNEL_RULES;
+  return game.stage
+    ? getChannelRules(game.loadout, game.stage.rule, game.element)
+    : DEFAULT_CHANNEL_RULES;
 }
 
-function stageIntro(config: StageConfig, index: number): string[] {
+function stageIntro(config: StageSetup, index: number, roundNumber: number): string[] {
   const lines = [
-    `Stage ${index + 1}/${ROUND_ONE.length}: ${config.name} (HP ${config.hp}, ${config.casts} casts)`,
+    `Round ${roundNumber} · Stage ${index + 1}/${ROUND_STAGES.length}: ${config.name} (HP ${config.hp}, ${config.casts} casts)`,
   ];
 
   if (config.rule !== null) {
@@ -105,6 +115,54 @@ function stageIntro(config: StageConfig, index: number): string[] {
   }
 
   return lines;
+}
+
+function startStage(
+  stageIndex: number,
+  roundNumber: number,
+  deck: readonly ChannelCard[],
+  seed: number,
+): { config: StageSetup; stage: StageState; seed: number } {
+  const definition: StageConfig | undefined = ROUND_STAGES[stageIndex];
+
+  if (definition === undefined) {
+    throw new Error(`No stage is configured at index ${stageIndex}`);
+  }
+
+  const baseHp = randomInteger(definition.hp.minValue, definition.hp.maxValue, seed);
+  let nextSeed = baseHp.seed;
+  let hp = baseHp.value;
+
+  for (let round = 1; round < roundNumber; round++) {
+    const growth = randomInteger(
+      definition.hpGrowthPerRound.minValue,
+      definition.hpGrowthPerRound.maxValue,
+      nextSeed,
+    );
+    hp += growth.value;
+    nextSeed = growth.seed;
+  }
+
+  let rule = definition.rule;
+
+  if (stageIndex === ROUND_STAGES.length - 1) {
+    const bossRule = pickRandom(BOSS_RULES, nextSeed);
+    rule = bossRule.value;
+    nextSeed = bossRule.seed;
+  }
+
+  const config: StageSetup = {
+    name: definition.name,
+    hp,
+    casts: definition.casts,
+    rule,
+  };
+
+  return {
+    config,
+    stage: createStage(config, deck, nextSeed),
+    seed: nextSeed,
+  };
 }
 
 function formatStep(step: TraceStep): string {
@@ -123,23 +181,24 @@ export function applyPick(game: Game, elementId: string): Game {
     return game;
   }
 
-  const start = createStartingLoadout(element, MODIFIERS, ITEMS, game.seed);
-  const config = ROUND_ONE[0] as StageConfig;
-  const stage = createStage(config, game.deck, start.seed);
+  const start = createStartingLoadout(MODIFIERS, ITEMS, game.seed);
+  const firstStage = startStage(0, 1, game.deck, start.seed);
 
   return {
     ...game,
     phase: "stage",
-    seed: start.seed,
+    seed: firstStage.seed,
     stageIndex: 0,
+    roundNumber: 1,
+    element,
     loadout: start.loadout,
-    stage,
+    stage: firstStage.stage,
     selectedSlot: null,
     log: [
       ...game.log,
       `You chose ${element.name}.`,
-      `Random modifier: ${start.loadout[2]?.name ?? "none"}. Random item: ${start.loadout[0]?.name ?? "none"}.`,
-      ...stageIntro(config, 0),
+      `Random modifier: ${start.loadout[1]?.name ?? "none"}. Random item: ${start.loadout[0]?.name ?? "none"}.`,
+      ...stageIntro(firstStage.config, 0, 1),
     ],
   };
 }
@@ -173,9 +232,9 @@ export function applyRelease(game: Game): Game {
   }
 
   const castNumber = game.stage.castNumber;
-  const result = releaseCast(game.stage, game.loadout);
+  const result = releaseCast(game.stage, game.loadout, game.element);
   const stage = result.nextState;
-  const lastStage = game.stageIndex === ROUND_ONE.length - 1;
+  const lastStage = game.stageIndex === ROUND_STAGES.length - 1;
 
   const lines = [
     `Cast ${castNumber}`,
@@ -195,8 +254,17 @@ export function applyRelease(game: Game): Game {
 
   if (stage.status === "cleared") {
     if (lastStage) {
-      lines.push(`${stage.name} is down. Round cleared!`);
-      return { ...next, phase: "won", log: [...game.log, ...lines] };
+      const roundNumber = game.roundNumber + 1;
+      lines.push(
+        `${stage.name} is down. Round ${game.roundNumber} cleared.`,
+        `Visit the shop before Round ${roundNumber}.`,
+      );
+
+      return enterShop({
+        ...next,
+        seed: stage.seed,
+        log: [...game.log, ...lines],
+      });
     }
 
     // a cleared stage pays gold and offers a reward pick; the rng continues from the stage
@@ -337,6 +405,35 @@ export function applyBuy(game: Game, index: number): Game {
   }
 }
 
+export function applySellCard(game: Game, slot: number): Game {
+  if (
+    game.phase !== "shop" ||
+    game.pendingCard !== null ||
+    !Number.isInteger(slot) ||
+    slot < 0 ||
+    slot >= game.unlockedSlots
+  ) {
+    return game;
+  }
+
+  const card = game.loadout[slot];
+
+  if (card === null || card === undefined || card.type === "element") {
+    return game;
+  }
+
+  const loadout = [...game.loadout];
+  loadout[slot] = null;
+
+  return {
+    ...game,
+    loadout,
+    gold: game.gold + SELL_CARD_PRICE,
+    selectedSlot: null,
+    log: [...game.log, `You sell ${card.name} for ${SELL_CARD_PRICE} gold.`],
+  };
+}
+
 // changes of mind: drop a card that is waiting for a slot
 export function applyCancelPending(game: Game): Game {
   if (game.pendingCard === null) {
@@ -380,24 +477,26 @@ function applyPlaceCard(game: Game, slot: number): Game {
 export function applyNextStage(game: Game): Game {
   if (
     game.phase !== "shop" ||
-    game.pendingCard !== null ||
-    game.stageIndex >= ROUND_ONE.length - 1
+    game.pendingCard !== null
   ) {
     return game;
   }
 
-  const stageIndex = game.stageIndex + 1;
-  const config = ROUND_ONE[stageIndex] as StageConfig;
-  const stage = createStage(config, game.deck, game.seed);
+  const startsNextRound = game.stageIndex === ROUND_STAGES.length - 1;
+  const roundNumber = startsNextRound ? game.roundNumber + 1 : game.roundNumber;
+  const stageIndex = startsNextRound ? 0 : game.stageIndex + 1;
+  const nextStage = startStage(stageIndex, roundNumber, game.deck, game.seed);
 
   return {
     ...game,
+    seed: nextStage.seed,
     phase: "stage",
+    roundNumber,
     stageIndex,
-    stage,
+    stage: nextStage.stage,
     shopOffers: [],
     selectedSlot: null,
-    log: [...game.log, ...stageIntro(config, stageIndex)],
+    log: [...game.log, ...stageIntro(nextStage.config, stageIndex, roundNumber)],
   };
 }
 
@@ -483,6 +582,10 @@ export function skipReward(): void {
 
 export function buy(index: number): void {
   update(applyBuy(current, index));
+}
+
+export function sellCard(slot: number): void {
+  update(applySellCard(current, slot));
 }
 
 export function cancelPending(): void {

@@ -1,14 +1,18 @@
-import type { ChannelRules, Loadout, StageRule } from "./types";
+import type { Card, ChannelRules, Loadout, StageRule } from "./types";
+import { cardsInEffectOrder } from "./loadout";
 import { DEFAULT_CHANNEL_RULES } from "../data/tuning";
 
-// the channel rules for a stage: the defaults, plus Unstable tolerance from the loadout,
-// plus the stage's own rule (boss rule)
-export function getChannelRules(loadout: Loadout, rule: StageRule | null): ChannelRules {
+// the channel rules for a stage: defaults, element and loadout tolerance, plus the stage rule
+export function getChannelRules(
+  loadout: Loadout,
+  rule: StageRule | null,
+  element: Card | null = null,
+): ChannelRules {
   let unstableLimit = DEFAULT_CHANNEL_RULES.unstableLimit;
   let multiplierCap = DEFAULT_CHANNEL_RULES.multiplierCap;
   let halfValueAbove = DEFAULT_CHANNEL_RULES.halfValueAbove;
 
-  for (const card of loadout) {
+  for (const card of cardsInEffectOrder(loadout, element)) {
     if (card === null) {
       continue;
     }

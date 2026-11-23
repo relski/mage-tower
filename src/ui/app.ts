@@ -1,10 +1,11 @@
-import { channelMultiplier, channelPower, unstableCount } from "../core/channel";
+import { channelMultiplier, channelPower, isBackfired, unstableCount } from "../core/channel";
 import { canDraw, canRelease } from "../core/round";
 import { describeReward, describeOffer } from "../core/run";
 import { describeRule } from "../core/rules";
 import type { ChannelCard } from "../core/types";
 import { ELEMENTS } from "../data/cards/elements";
-import { ROUND_ONE } from "../data/stages/rounds";
+import { ROUND_STAGES } from "../data/stages/rounds";
+import { SELL_CARD_PRICE } from "../data/tuning";
 import {
   buy,
   cancelPending,
@@ -17,6 +18,7 @@ import {
   restart,
   rulesFor,
   selectSlot,
+  sellCard,
   skipReward,
   subscribe,
 } from "../state/game";
@@ -35,31 +37,42 @@ function cardLabel(card: ChannelCard): string {
   return card.kind === "unstable" ? "Unstable" : String(card.value);
 }
 
-function channelText(game: Game): string {
-  if (game.stage === null || game.stage.channel.length === 0) {
-    return "(empty)";
+function channelText(
+  game: Game,
+  channel: readonly ChannelCard[] = game.stage?.channel ?? [],
+): string {
+  if (game.stage === null || channel.length === 0) {
+    return `<p class="muted">(empty)</p>`;
   }
 
-  const { channel } = game.stage;
   const rules = rulesFor(game);
-
-  const cards = channel.map(cardLabel).join(" · ");
   const power = channelPower(channel, rules);
   const multiplier = channelMultiplier(channel.length, rules);
   const count = unstableCount(channel);
+  const cards = channel
+    .map(
+      (card) => `
+        <div class="channel-card ${card.kind}" role="listitem">
+          ${escapeHtml(cardLabel(card))}
+        </div>`,
+    )
+    .join("");
 
-  return `${cards}\nPower ${power} × ${multiplier} · Unstable ${count}/${rules.unstableLimit}`;
+  return `
+    <div class="channel-cards" role="list" aria-label="Drawn channel cards">${cards}</div>
+    <p class="channel-stats">Power ${power} × ${multiplier} · Unstable ${count}/${rules.unstableLimit}</p>`;
 }
 
 // the five loadout slots, as buttons you can click to swap two of them
 // (or to place a card you are holding)
-function loadoutView(game: Game): string {
+function loadoutView(game: Game, interactionLocked = false): string {
   const pending = game.pendingCard;
   const canClick =
-    pending !== null ||
-    (game.phase === "stage" && game.stage !== null && game.stage.channel.length === 0) ||
-    game.phase === "reward" ||
-    game.phase === "shop";
+    !interactionLocked &&
+    (pending !== null ||
+      (game.phase === "stage" && game.stage !== null && game.stage.channel.length === 0) ||
+      game.phase === "reward" ||
+      game.phase === "shop");
 
   const slots = game.loadout
     .map((card, index) => {
@@ -82,11 +95,13 @@ function loadoutView(game: Game): string {
     })
     .join("");
 
-  const hint = pending
-    ? `Click a slot to place ${escapeHtml(pending.card.name)} (it replaces the card there).`
-    : canClick
-      ? "Cards trigger left to right. Click two slots to swap them."
-      : "Release the channel to reorder.";
+  const hint = interactionLocked
+    ? "The failed cast is clearing."
+    : pending
+      ? `Click a slot to place ${escapeHtml(pending.card.name)} (it replaces the card there).`
+      : canClick
+        ? "Loadout cards trigger left to right; your element stays fixed between slots 1 and 2. Click two slots to swap them."
+        : "Release the channel to reorder.";
 
   const cancel = pending ? `<button class="small" data-action="cancel">Cancel</button>` : "";
 
@@ -111,7 +126,7 @@ function pickView(game: Game): string {
   return `
     <section class="panel">
       <h2>Choose your element</h2>
-      <p class="muted">You also get a random modifier and a random item.</p>
+      <p class="muted">Your element stays fixed outside the loadout. You also get a random modifier and item.</p>
       <div class="choices">${choices}</div>
     </section>
     <pre class="log">${escapeHtml(game.log.join("\n"))}</pre>`;
@@ -119,11 +134,18 @@ function pickView(game: Game): string {
 
 function summaryView(game: Game, stage: NonNullable<Game["stage"]>): string {
   const rule = stage.rule !== null ? `<p>Rule: ${escapeHtml(describeRule(stage.rule))}</p>` : "";
+  const remainingHp = Math.max(0, stage.targetHp - stage.totalDamage);
 
   return `
     <section class="panel">
-      <p>Stage ${game.stageIndex + 1}/${ROUND_ONE.length} · ${escapeHtml(stage.name)}</p>
-      <p>Damage ${stage.totalDamage} / ${stage.targetHp}</p>
+      <p>Round ${game.roundNumber} · Stage ${game.stageIndex + 1}/${ROUND_STAGES.length} · ${escapeHtml(stage.name)}</p>
+      <p>Element ${escapeHtml(game.element?.name ?? "none")}</p>
+      <div class="damage-meter">
+        <label for="stage-hp">Enemy HP ${remainingHp} / ${stage.targetHp}</label>
+        <meter id="stage-hp" min="0" max="${stage.targetHp}" value="${remainingHp}">
+          ${remainingHp} of ${stage.targetHp}
+        </meter>
+      </div>
       <p>Casts left ${stage.castsRemaining} · Gold ${game.gold}</p>
       ${rule}
     </section>`;
@@ -159,6 +181,7 @@ function rewardView(game: Game, stage: NonNullable<Game["stage"]>): string {
 
 function shopView(game: Game, stage: NonNullable<Game["stage"]>): string {
   const waiting = game.pendingCard !== null;
+  const startsNextRound = game.stageIndex === ROUND_STAGES.length - 1;
 
   const offers =
     game.shopOffers.length === 0
@@ -175,51 +198,74 @@ function shopView(game: Game, stage: NonNullable<Game["stage"]>): string {
           })
           .join("");
 
+  const sellOptions = game.loadout
+    .map((card, slot) =>
+      card !== null && card.type !== "element" && slot < game.unlockedSlots
+        ? `
+        <button class="choice" data-action="sell" data-slot="${slot}" ${waiting ? "disabled" : ""}>
+          <span class="slot-name">Sell ${escapeHtml(card.name)}</span>
+          <span class="slot-text">Receive ${SELL_CARD_PRICE} gold</span>
+        </button>`
+        : "",
+    )
+    .join("");
+
   return `
     ${summaryView(game, stage)}
     <section class="panel">
       <h2>Shop</h2>
-      <p class="muted">You have ${game.gold} gold.</p>
+      <p class="muted">
+        You have ${game.gold} gold.
+        ${startsNextRound ? `Prepare for Round ${game.roundNumber + 1}.` : ""}
+      </p>
       <div class="choices">${offers}</div>
+    </section>
+    <section class="panel">
+      <h2>Sell a loadout card</h2>
+      <div class="choices">
+        ${sellOptions || `<p class="muted">No loadout cards to sell.</p>`}
+      </div>
     </section>
     ${loadoutView(game)}
     <div class="actions">
-      <button data-action="next" ${waiting ? "disabled" : ""}>Next stage</button>
+      <button data-action="next" ${waiting ? "disabled" : ""}>
+        ${startsNextRound ? `Begin Round ${game.roundNumber + 1}` : "Next stage"}
+      </button>
     </div>
     ${logView(game)}`;
 }
 
-function stageView(game: Game, stage: NonNullable<Game["stage"]>): string {
+function stageView(
+  game: Game,
+  stage: NonNullable<Game["stage"]>,
+  backfirePreview: readonly ChannelCard[] | null,
+): string {
   const unstableLeft = unstableCount(stage.drawPile);
   const rules = rulesFor(game);
 
   const banner =
-    game.phase === "won"
-      ? `<p class="banner win">Round cleared! The tower falls silent.</p>`
-      : game.phase === "lost"
-        ? `<p class="banner lose">Out of casts. The run is over.</p>`
-        : "";
+    game.phase === "lost" ? `<p class="banner lose">Out of casts. The run is over.</p>` : "";
 
   const actions =
-    game.phase === "won" || game.phase === "lost"
+    game.phase === "lost"
       ? `<button data-action="restart">New game</button>`
       : `
-      <button data-action="draw" ${canDraw(stage, rules) ? "" : "disabled"}>Draw</button>
-      <button data-action="release" ${canRelease(stage) ? "" : "disabled"}>Release</button>`;
+      <button data-action="draw" ${!backfirePreview && canDraw(stage, rules) ? "" : "disabled"}>Draw</button>
+      <button data-action="release" ${!backfirePreview && canRelease(stage) ? "" : "disabled"}>Release</button>`;
 
   return `
     ${summaryView(game, stage)}
 
-    ${loadoutView(game)}
+    ${loadoutView(game, backfirePreview !== null)}
 
     <section class="panel">
       <h2>Deck</h2>
       <p>Draw pile ${stage.drawPile.length} (Unstable left ${unstableLeft}) · Discard ${stage.discardPile.length}</p>
     </section>
 
-    <section class="panel">
+    <section class="panel channel-panel${backfirePreview !== null ? " backfire" : ""}">
       <h2>Channel</h2>
-      <pre>${escapeHtml(channelText(game))}</pre>
+      ${channelText(game, backfirePreview ?? stage.channel)}
     </section>
 
     ${banner}
@@ -228,7 +274,7 @@ function stageView(game: Game, stage: NonNullable<Game["stage"]>): string {
     ${logView(game)}`;
 }
 
-function view(game: Game): string {
+function view(game: Game, backfirePreview: readonly ChannelCard[] | null): string {
   let body: string;
 
   if (game.stage === null) {
@@ -238,7 +284,7 @@ function view(game: Game): string {
   } else if (game.phase === "shop") {
     body = shopView(game, game.stage);
   } else {
-    body = stageView(game, game.stage);
+    body = stageView(game, game.stage, backfirePreview);
   }
 
   return `
@@ -253,8 +299,20 @@ function view(game: Game): string {
 }
 
 export function mountApp(root: HTMLElement): void {
+  let backfirePreview: readonly ChannelCard[] | null = null;
+  let backfireTimeout: number | null = null;
+
+  const clearBackfirePreview = (): void => {
+    if (backfireTimeout !== null) {
+      window.clearTimeout(backfireTimeout);
+      backfireTimeout = null;
+    }
+
+    backfirePreview = null;
+  };
+
   const render = (): void => {
-    root.innerHTML = view(getGame());
+    root.innerHTML = view(getGame(), backfirePreview);
 
     // keep the newest log lines in view
     const log = root.querySelector<HTMLElement>(".log");
@@ -276,9 +334,37 @@ export function mountApp(root: HTMLElement): void {
       case "pick":
         pick(button.dataset.id ?? "");
         break;
-      case "draw":
+      case "draw": {
+        const game = getGame();
+        const stage = game.stage;
+        const rules = rulesFor(game);
+        const drawnCard = stage?.drawPile[0];
+        const drawnChannel =
+          stage !== null && drawnCard !== undefined
+            ? [...stage.channel, drawnCard]
+            : null;
+        const failedChannel =
+          drawnChannel !== null &&
+          stage !== null &&
+          canDraw(stage, rules) &&
+          isBackfired(drawnChannel, rules)
+            ? drawnChannel
+            : null;
+
         draw();
+
+        if (failedChannel !== null) {
+          clearBackfirePreview();
+          backfirePreview = failedChannel;
+          render();
+          backfireTimeout = window.setTimeout(() => {
+            backfirePreview = null;
+            backfireTimeout = null;
+            render();
+          }, 2000);
+        }
         break;
+      }
       case "release":
         release();
         break;
@@ -300,7 +386,11 @@ export function mountApp(root: HTMLElement): void {
       case "slot":
         selectSlot(Number(button.dataset.slot));
         break;
+      case "sell":
+        sellCard(Number(button.dataset.slot));
+        break;
       case "restart":
+        clearBackfirePreview();
         restart();
         break;
     }

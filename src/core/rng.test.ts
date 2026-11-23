@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { nextRandom, shuffle } from "./rng";
+import { nextRandom, randomInteger, shuffle } from "./rng";
 
 describe("nextRandom", () => {
   it("returns a repeatable value and next seed", () => {
@@ -29,5 +29,25 @@ describe("shuffle", () => {
     const afterFirstDraw = nextRandom(123).seed;
 
     expect(result.seed).toBe(nextRandom(afterFirstDraw).seed);
+  });
+});
+
+describe("randomInteger", () => {
+  it("returns an integer inside the inclusive range and is repeatable", () => {
+    const first = randomInteger(4, 9, 123);
+
+    expect(first.value).toBeGreaterThanOrEqual(4);
+    expect(first.value).toBeLessThanOrEqual(9);
+    expect(Number.isInteger(first.value)).toBe(true);
+    expect(first).toEqual(randomInteger(4, 9, 123));
+  });
+
+  it("returns the bound for a one-value range", () => {
+    expect(randomInteger(7, 7, 123).value).toBe(7);
+  });
+
+  it("rejects invalid ranges", () => {
+    expect(() => randomInteger(5, 4, 123)).toThrow();
+    expect(() => randomInteger(1.5, 4, 123)).toThrow();
   });
 });

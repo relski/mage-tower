@@ -14,6 +14,12 @@ function solo(card: Card): Loadout {
   return [card, null, null, null, null];
 }
 
+const emptyLoadout: Loadout = [null, null, null, null, null];
+
+function castWithElement(card: Card, state: ReturnType<typeof makeState>) {
+  return resolveCast(emptyLoadout, state, card);
+}
+
 // finds a seed whose first roll is (or is not) below p
 function findSeed(p: number, fires: boolean): number {
   for (let seed = 1; seed < 10000; seed++) {
@@ -28,7 +34,7 @@ function findSeed(p: number, fires: boolean): number {
 describe("Ice", () => {
   it("adds 15 damage and freezes every 3rd cast for ×3", () => {
     const score = (castNumber: number) =>
-      resolveCast(solo(ice), makeState({ castNumber, channel: [num(5)] })).score;
+      castWithElement(ice, makeState({ castNumber, channel: [num(5)] })).score;
 
     expect(score(1)).toBe(20);
     expect(score(2)).toBe(20);
@@ -44,23 +50,23 @@ describe("Lightning", () => {
     const hit = findSeed(0.25, true);
     const miss = findSeed(0.25, false);
 
-    // power 5 × 1.5 = 7, +20 = 27, then ×2 = 54 on a hit, then +15 for the Unstable card
-    expect(resolveCast(solo(lightning), makeState({ channel, seed: hit })).score).toBe(69);
-    expect(resolveCast(solo(lightning), makeState({ channel, seed: miss })).score).toBe(42);
+    // power 5 × 1.5 = 7, +17 = 24, then ×2 = 48 on a hit, then +15 for the Unstable card
+    expect(castWithElement(lightning, makeState({ channel, seed: hit })).score).toBe(63);
+    expect(castWithElement(lightning, makeState({ channel, seed: miss })).score).toBe(39);
   });
 
   it("gets no Unstable bonus without an Unstable card", () => {
     const miss = findSeed(0.25, false);
 
-    // power 10 × 1.5 = 15, +20 = 35
+    // power 10 × 1.5 = 15, +17 = 32
     expect(
-      resolveCast(solo(lightning), makeState({ channel: [num(5), num(5)], seed: miss })).score,
-    ).toBe(35);
+      castWithElement(lightning, makeState({ channel: [num(5), num(5)], seed: miss })).score,
+    ).toBe(32);
   });
 
   it("marks a successful roll in the trace", () => {
     const hit = findSeed(0.25, true);
-    const result = resolveCast(solo(lightning), makeState({ channel, seed: hit }));
+    const result = castWithElement(lightning, makeState({ channel, seed: hit }));
 
     expect(result.trace.some((step) => step.description.includes("lucky roll"))).toBe(true);
   });
@@ -68,18 +74,18 @@ describe("Lightning", () => {
 
 describe("Earth", () => {
   it("lets the channel hold one more Unstable card before backfiring", () => {
-    const rules = getChannelRules(solo(earth), null);
+    const rules = getChannelRules(emptyLoadout, null, earth);
 
     expect(isBackfired([unstable, unstable], rules)).toBe(false);
     expect(isBackfired([unstable, unstable, unstable], rules)).toBe(true);
   });
 
   it("scores a channel with two Unstable cards instead of backfiring", () => {
-    // power 5 × 2 (3 cards) = 10, +15 = 25
-    const result = resolveCast(solo(earth), makeState({ channel: [num(5), unstable, unstable] }));
+    // power 5 × 2 (3 cards) = 10, +24 = 34
+    const result = castWithElement(earth, makeState({ channel: [num(5), unstable, unstable] }));
 
     expect(result.backfired).toBe(false);
-    expect(result.score).toBe(25);
+    expect(result.score).toBe(34);
   });
 });
 

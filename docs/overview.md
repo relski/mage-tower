@@ -1,12 +1,17 @@
 # Mage Tower: Prototype Project Document
 
-Working title. Browser game, TypeScript, mobile-first. Draft v0.3, November 23, 2026.
+Working title. Browser game, TypeScript, mobile-first. Draft v0.4, November 23, 2026.
 
 Version history:
 
 - v0.1 used fully automatic casts.
 - v0.2 replaced that with the channel-deck loop, because automatic casts made the first round a guaranteed win.
 - v0.3 brings the document in line with the code after Phases 1 to 3: elements, 16 modifiers and 10 items, three stages with a boss rule, rewards, a shop, gold and slot unlocks.
+- v0.4 records changes made after the initial commit:
+  - Boss rules are selected randomly per boss stage. Enemy and boss HP use seeded ranges, gain seeded growth in later rounds, and the three-stage round repeats until defeat; a shop opens after each boss.
+  - The chosen element is immutable and outside the loadout. Runs start with one random item and modifier plus three empty slots, and any loadout card can be sold in a shop for 5 gold.
+  - Drawn channel cards are shown as colored boxes, Unstable cards use a neutral color, and a failed cast stays visible with a red panel for one second before clearing. The enemy-HP meter starts full and drains as damage is dealt.
+  - Element defaults and score tests were updated to current balance values (Fire +3 per burn stack, Lightning +17 damage, Earth +24 damage).
 
 ## 1. Pitch
 
@@ -30,7 +35,7 @@ Success criteria:
 
 ### Terms
 
-- **Loadout cards:** element, modifier and item cards. They sit in five slots (three unlocked at the start) and amplify every cast.
+- **Loadout cards:** modifier and item cards. They sit in five slots (three unlocked at the start) and amplify every cast. The chosen element is separate and fixed for the run.
 - **Channel deck:** number cards and Unstable cards. You draw from it each cast. It sets the raw power and the risk.
 - **Cast:** one channel (draw cards, then release) followed by loadout scoring.
 - **Power:** the sum of the number cards drawn in a cast.
@@ -41,27 +46,27 @@ Success criteria:
 
 ### Run start
 
-1. Pick one base element.
+1. Pick one base element; it stays outside the loadout and cannot be removed or reordered.
 2. Receive one random modifier and one random item.
 3. Receive the starting channel deck (20 cards, see below).
 
 ### Loadout
 
-Five slots. Slots 1 to 3 start unlocked and filled, in the order item, element, modifier. Slots 4 and 5 start **locked** and are unlocked in the shop. Potions are a later addition.
+Five slots. Slots 1 to 3 start unlocked: slot 1 holds the random item, slot 2 the random modifier, and slot 3 is empty. Slots 4 and 5 start **locked** and are unlocked in the shop. The chosen element is not a slot card; its effect always runs between slots 1 and 2. Potions are a later addition.
 
-Loadout cards trigger **left to right**, so slot order is a core decision. Two slots can be swapped by clicking them, but only while the channel is empty, so the rules cannot change in the middle of a cast.
+Loadout cards trigger **left to right**, so slot order is a core decision. Two slots can be swapped by clicking them, but only while the channel is empty, so the rules cannot change in the middle of a cast. The element stays in its fixed position when slots are swapped.
 
 ### Rounds and stages
 
-A round has three stages, four casts each:
+A round has three stages, four casts each. The same wave repeats after the boss is defeated, with each stage's HP increased by a seeded random amount:
 
-| Stage | Enemy | HP | Rule |
-| --- | --- | --- | --- |
-| 1 | Goblin Scout (easy mob) | 250 | none |
-| 2 | Stone Ogre (medium enemy) | 300 | none |
-| 3 | Tower Warden (round boss) | 300 | channel multiplier capped at ×2 |
+| Stage | Enemy | Starting HP | HP added per later round | Rule |
+| --- | --- | --- | --- | --- |
+| 1 | Goblin Scout (easy mob) | 230–270 | 20–30 | none |
+| 2 | Stone Ogre (medium enemy) | 280–320 | 30–40 | none |
+| 3 | Tower Warden (round boss) | 450–550 | 50–75 | one seeded random boss rule |
 
-Dealing damage equal to the enemy's HP before running out of casts clears the stage. Running out of casts ends the run. Clearing the boss wins the round. All numbers are placeholders to tune with playtests.
+HP is rolled when each stage starts. Each later round adds a new seeded random increase from that stage's growth range. Dealing damage equal to the enemy's HP before running out of casts clears the stage; running out of casts ends the run. Clearing the boss opens a shop; leaving it starts the next round at stage 1. HP ranges and growth values are placeholders to tune with playtests.
 
 ### Channel deck and casting
 
@@ -97,18 +102,18 @@ With these numbers the sweet spot for a plain deck is around 3 to 4 cards. The U
 
 ### Channel rules
 
-Three rules shape the channel during a stage. They start at their defaults and are changed by the loadout and by the stage's own rule:
+Three rules shape the channel during a stage. They start at their defaults and are changed by the fixed element, loadout cards and the stage's own rule:
 
 | Rule | Default | Changed by |
 | --- | --- | --- |
 | Unstable limit | 2 | Earth and Ward (+1), Glass Cannon (−1), a boss rule (±N). Never below 1 |
-| Multiplier cap | none | a boss rule (the Tower Warden caps it at ×2) |
+| Multiplier cap | none | a boss rule selected when the boss stage starts |
 | Half value above | none | a boss rule (number cards above the threshold count as half, rounded down) |
 
 ### Scoring a cast
 
 1. **Starting total** = channel power × channel multiplier, rounded down.
-2. **Loadout cards** trigger left to right on the running total. An effect has a trigger and an action:
+2. **Loadout cards and the fixed element** trigger on the running total in this order: loadout slot 1, element, then loadout slots 2 through 5. An effect has a trigger and an action:
    - Triggers: always, first cast, every Nth cast, chance (rolls the seeded RNG), and when the channel has an Unstable card.
    - Actions: add damage, multiply the total, add a stack, add damage per stack, and add Unstable tolerance (a channel rule, applied while channeling rather than while scoring).
 3. A multiply step applies to the running total at that moment, which is why card order matters.
@@ -120,10 +125,10 @@ Scores are whole numbers: the total is rounded down after every multiplication. 
 
 | Element | Identity | Numbers |
 | --- | --- | --- |
-| Fire | **Burn:** each cast adds a burn stack, and later casts gain bonus damage per stack | +20 damage, +6 per stack |
+| Fire | **Burn:** each cast adds a burn stack, and later casts gain bonus damage per stack | +20 damage, +3 per stack |
 | Ice | **Rhythm:** every 3rd cast is frozen and scores a large multiplier | +15 damage, 3rd cast ×3 |
-| Lightning | **Surge:** a chance to trigger a bonus, plus a bonus when the channel has an Unstable card | +20 damage, 25% chance of ×2, +15 damage with an Unstable card |
-| Earth | **Reserves:** the channel tolerates one more Unstable card, so backfire happens on the 3rd instead of the 2nd | +15 damage, tolerance +1 |
+| Lightning | **Surge:** a chance to trigger a bonus, plus a bonus when the channel has an Unstable card | +17 damage, 25% chance of ×2, +15 damage with an Unstable card |
+| Earth | **Reserves:** the channel tolerates one more Unstable card, so backfire happens on the 3rd instead of the 2nd | +24 damage, tolerance +1 |
 
 All numbers are placeholders and live in data files.
 
@@ -165,11 +170,11 @@ All numbers are placeholders and live in data files.
 
 ### Boss rules
 
-The engine supports three kinds of stage rule:
+When the boss stage starts, the seeded RNG chooses one rule from the boss rule pool. The choice is fixed for that stage and repeats when replaying the same seed. The current pool is:
 
-- **Unstable limit change:** for example, only 1 Unstable card allowed before a backfire.
-- **Multiplier cap:** the channel multiplier cannot go above a value (used by the Tower Warden, at ×2).
-- **Half value above:** number cards above a threshold count as half value, rounded down.
+- **Unstable limit change:** the Tower Warden makes the channel backfire one Unstable card sooner.
+- **Multiplier cap:** the channel multiplier cannot go above ×2.
+- **Half value above:** number cards above 5 count as half value, rounded down.
 
 ### Rewards and shop
 
@@ -182,7 +187,7 @@ The engine supports three kinds of stage rule:
 
 A card reward is held until the player clicks an unlocked slot, and it replaces whatever is in that slot. The player can cancel and pick something else.
 
-**Shop.** After the reward pick, the shop offers:
+**Shop.** After a normal-stage reward pick, and again after defeating the boss before the next round, the shop offers:
 
 | Offer | Price |
 | --- | --- |
@@ -191,17 +196,17 @@ A card reward is held until the player clicks an unlocked slot, and it replaces 
 | Remove an Unstable card from the channel deck (only if the deck has one) | 15 |
 | Unlock slot 4, then slot 5 | 25, then 40 |
 
-A bought card is paid for when it is placed in a slot. Leaving the shop starts the next stage. Clearing the boss wins the round, with no reward or shop.
+Any modifier or item in an unlocked loadout slot can be sold in the shop for 5 gold; the element is never sellable. A bought card is paid for when it is placed in a slot. Leaving the shop starts the next stage, or starts stage 1 of the next round after the boss. The boss does not give a reward pick.
 
 **Growth paths.** There are three ways to get stronger: the loadout (new cards, slot order and unlocked slots), the channel deck (numbers added or removed, fewer Unstable cards), and gold spent in the shop.
 
 ### Reference casts (test cases)
 
-Loadout order: Cracked Staff (+20 damage on the first cast of a stage), Fire (+20 damage, +6 per burn stack, then gain a burn stack), Pierce (×1.5).
+Starting effect order: Cracked Staff (+20 damage on the first cast of a stage), fixed Fire (+20 damage, +3 per burn stack, then gain a burn stack), Pierce (×1.5).
 
 - **Cast 1:** draw 5, Unstable, 3, then release. Power is 8, three cards gives ×2, so 16. Staff +20 = 36, Fire +20 = 56, Pierce ×1.5 = **84**.
-- **Cast 2** (1 burn stack): draw 4, 4, then release. Power is 8, two cards gives ×1.5, so 12. Staff is inactive. Fire +20 +6 = 38. Pierce ×1.5 = **57**.
-- **Order test:** with the loadout reordered to Fire, Pierce, Staff, the same cast 1 draws give 16 +20 = 36, ×1.5 = 54, +20 = **74**.
+- **Cast 2** (1 burn stack): draw 4, 4, then release. Power is 8, two cards gives ×1.5, so 12. Staff is inactive. Fire +20 +3 = 35. Pierce ×1.5 rounds down to **52**.
+- **Order test:** put Pierce in slot 1 and Cracked Staff in slot 2. The fixed Fire remains between them: 16 ×1.5 = 24, +20 = 44, +20 = **64**.
 - **Backfire test:** draw Unstable, then Unstable. The cast scores **0**.
 
 These replace the v0.1 reference round, and they depend on Fire, Pierce and Cracked Staff keeping their current numbers.
@@ -211,18 +216,19 @@ These replace the v0.1 reference round, and they depend on Fire, Pierce and Crac
 **In scope**
 
 - 4 base elements, 16 modifiers, 10 items
-- Starting loadout: choose 1 element, receive 1 random modifier and 1 random item
+- Starting loadout: choose 1 fixed element outside the loadout; receive 1 random modifier and 1 random item in slots 1 and 2, with slot 3 empty
 - Starting channel deck of 20 cards (14 numbers, 6 Unstable)
-- 1 round of 3 stages (easy mob, medium enemy, boss with one special rule)
+- Repeating rounds of 3 stages (easy mob, medium enemy, boss with one special rule); stage HP grows each round
 - Channel casting: draw, release, backfire, multiplier steps
-- Gold, a reward pick after each stage, a shop, and slot unlocks
+- Gold, reward picks after normal stages, a shop after each reward and boss, and slot unlocks
+- Sell any modifier or item in an unlocked loadout slot for 5 gold in the shop
 - Reorder loadout cards by clicking two slots
 - Text UI first, then a real mobile UI with cast animation (number popups and a running total)
 
 **Out of scope for now**
 
 - Potions, meta-progression, and memory fragments
-- Multiple rounds, tower story content, and audio polish
+- Tower story content and audio polish
 - Suits, special effects, or upgrades on channel cards
 - Enemy element affinities
 - Save system beyond the current run
@@ -240,15 +246,15 @@ These replace the v0.1 reference round, and they depend on Fire, Pierce and Crac
 
 ## 6. Data model
 
-- **Card (loadout card):** id, name, type (element, modifier, item), an optional one-line description for the UI, and effects.
+- **Card:** id, name, type (element, modifier, item), an optional one-line description for the UI, and effects. The chosen element is stored separately from loadout cards.
 - **Effect:** a trigger and an action (see Scoring a cast).
-- **Loadout:** an ordered list of 5 slots, each empty or holding a card. Only the first `unlockedSlots` slots can be used.
+- **Loadout:** an ordered list of 5 slots, each empty or holding a modifier or item. Only the first `unlockedSlots` slots can be used.
 - **ChannelCard:** either a number card (with a value) or an Unstable card.
-- **StageConfig:** name, HP, casts and an optional stage rule. **StageRule:** unstable limit change, multiplier cap, or half value above.
-- **ChannelRules:** the effective Unstable limit, multiplier cap and half-value threshold for a stage (defaults, plus the loadout, plus the stage rule).
+- **StageConfig:** name, starting HP range, per-round HP growth range, casts and an optional stage rule. **StageRule:** unstable limit change, multiplier cap, or half value above.
+- **ChannelRules:** the effective Unstable limit, multiplier cap and half-value threshold for a stage (defaults, plus the element and loadout, plus the stage rule).
 - **Stage state:** name, rule, target HP, casts remaining, cast number, total damage, draw pile, discard pile, current channel, burn stacks, status, and the RNG seed.
 - **RewardOption and ShopOffer:** see Rewards and shop.
-- **Game:** the phase, the run's seed, stage index, loadout, unlocked slots, channel deck, gold, the current stage state, reward options, shop offers, a card waiting for a slot, the selected slot, and the log.
+- **Game:** the phase, the run's seed, round number, stage index, fixed element, loadout, unlocked slots, channel deck, gold, the current stage state, reward options, shop offers, a card waiting for a slot, the selected slot, and the log.
 
 ## 7. Milestones
 
@@ -265,7 +271,7 @@ These replace the v0.1 reference round, and they depend on Fire, Pierce and Crac
 - **Luck against skill:** a bad draw can fail a stage. Deck-building and tolerance effects need to give the player real control over the odds, or it will feel unfair.
 - **Loadout order may feel minor** next to the channel decision. Playtests should check that rearranging still matters.
 - **Balance:** multiplicative stacking can run away quickly, so stage HP must be tuned alongside card power. A simulation of every element, modifier and item combination (best fixed stopping strategy) gave average clear rates of about 78%, 60% and 46% for the three stages.
-- **Earth against the boss:** Earth is the strongest element on normal stages but the weakest against the ×2 multiplier cap, because its power comes from drawing deep.
+- **Earth against the boss:** Earth is the strongest element on normal stages but is weakest against the ×2 multiplier cap, because its power comes from drawing deep. Random boss rules may change this matchup and should be playtested.
 - **Run economy:** gold is about 25 per stage and a card costs 20, which allows roughly one purchase per shop. A simple bot that always releases after 3 cards wins only a few percent of runs, so difficulty and growth need a human playtest.
 - **Text prototype limits:** a text UI can hide feel problems that animation would fix, and the reverse.
 
@@ -280,10 +286,11 @@ These replace the v0.1 reference round, and they depend on Fire, Pierce and Crac
 - **Rounding:** scores round down after every multiplication.
 - **Seeded randomness:** all randomness goes through a seeded generator, and its state lives in the stage state, so runs and tests are repeatable.
 - **Auto-release:** the channel releases by itself at 5 cards or on a backfire. This rule lives in the core, not in the UI.
-- **Reward flow:** a reward pick after every stage except the last, then the shop, then the next stage.
+- **Reward flow:** normal stages give a reward pick and shop; the boss gives no reward but opens a shop before the next round.
 - **Locked slots:** slots 4 and 5 start locked and are unlocked with gold.
-- **Reordering:** allowed on the stage, reward and shop screens, but only while the channel is empty.
-- **Boss rule:** the Tower Warden caps the channel multiplier at ×2. Other rules were simulated (half value above 5, a lower Unstable limit) and punished Earth as much or more, or were far too harsh.
+- **Reordering:** modifier and item slots can be swapped on the stage, reward and shop screens, but only while the channel is empty. The chosen element remains fixed outside the loadout.
+- **Boss rule:** the Tower Warden receives one seeded rule when each round's stage starts: a ×2 multiplier cap, an earlier Unstable backfire, or half value for number cards above 5. The pool and balance should be revisited after playtesting.
+- **Round progression:** defeating the boss opens a shop; leaving it starts another round. Each stage rolls its base HP and per-round growth from configured ranges, using the seeded RNG.
 
 ## 10. Open questions
 

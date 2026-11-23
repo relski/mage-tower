@@ -38,3 +38,27 @@ export function pickRandom<T>(list: readonly T[], seed: number): { value: T; see
 
   return { value, seed: roll.seed };
 }
+
+export function randomInteger(
+  minValue: number,
+  maxValue: number,
+  seed: number,
+): { value: number; seed: number } {
+  const rangeSize = maxValue - minValue + 1;
+
+  if (
+    !Number.isSafeInteger(minValue) ||
+    !Number.isSafeInteger(maxValue) ||
+    !Number.isSafeInteger(rangeSize) ||
+    rangeSize < 1
+  ) {
+    throw new Error("Expected an inclusive range of safe integers with minValue <= maxValue");
+  }
+
+  const roll = nextRandom(seed);
+
+  return {
+    value: minValue + Math.floor(roll.value * rangeSize),
+    seed: roll.seed,
+  };
+}

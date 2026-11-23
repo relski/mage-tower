@@ -5,8 +5,9 @@ import type { Loadout } from "../core/types";
 import { earth, fire } from "../data/cards/elements";
 import { crackedStaff } from "../data/cards/items";
 import { hex, pierce } from "../data/cards/modifiers";
-import { ROUND_ONE } from "../data/stages/rounds";
-import { SKIP_REWARD_GOLD, STARTING_UNLOCKED_SLOTS } from "../data/tuning";
+import { BOSS_RULES } from "../data/stages/bosses";
+import { ROUND_STAGES } from "../data/stages/rounds";
+import { SELL_CARD_PRICE, SKIP_REWARD_GOLD, STARTING_UNLOCKED_SLOTS } from "../data/tuning";
 import {
   applyBuy,
   applyCancelPending,
@@ -15,6 +16,7 @@ import {
   applyNextStage,
   applyPick,
   applyRelease,
+  applySellCard,
   applySelectSlot,
   applySkipReward,
   createGame,
@@ -22,11 +24,16 @@ import {
 } from "./game";
 import type { Game } from "./game";
 
-const reference: Loadout = [crackedStaff, fire, pierce, null, null];
+const reference: Loadout = [crackedStaff, pierce, null, null, null];
 
 // a game that is already in a stage, with a chosen loadout and stage state
-function stageGame(stage = makeState(), loadout: Loadout = reference, stageIndex = 0): Game {
-  return { ...applyPick(createGame(1), "fire"), loadout, stage, stageIndex };
+function stageGame(
+  stage = makeState(),
+  loadout: Loadout = reference,
+  stageIndex = 0,
+  element = fire,
+): Game {
+  return { ...applyPick(createGame(1), "fire"), loadout, stage, stageIndex, element };
 }
 
 // a game waiting at the reward screen
@@ -64,6 +71,7 @@ describe("createGame and applyPick", () => {
 
     expect(game.phase).toBe("pick");
     expect(game.stage).toBe(null);
+    expect(game.element).toBe(null);
     expect(game.loadout).toEqual([null, null, null, null, null]);
     expect(game.unlockedSlots).toBe(STARTING_UNLOCKED_SLOTS);
     expect(game.deck).toHaveLength(20);
@@ -71,15 +79,19 @@ describe("createGame and applyPick", () => {
     expect(game.startSeed).toBe(123);
   });
 
-  it("choosing an element builds the loadout and starts stage 1", () => {
+  it("choosing an element builds the starting loadout and starts stage 1", () => {
     const game = applyPick(createGame(123), "ice");
 
     expect(game.phase).toBe("stage");
+    expect(game.roundNumber).toBe(1);
     expect(game.stageIndex).toBe(0);
-    expect(game.loadout[1]?.id).toBe("ice");
+    expect(game.element?.id).toBe("ice");
     expect(game.loadout[0]?.type).toBe("item");
-    expect(game.loadout[2]?.type).toBe("modifier");
-    expect(game.stage?.name).toBe(ROUND_ONE[0]?.name);
+    expect(game.loadout[1]?.type).toBe("modifier");
+    expect(game.loadout.slice(2)).toEqual([null, null, null]);
+    expect(game.stage?.name).toBe(ROUND_STAGES[0]?.name);
+    expect(game.stage?.targetHp).toBeGreaterThanOrEqual(ROUND_STAGES[0]!.hp.minValue);
+    expect(game.stage?.targetHp).toBeLessThanOrEqual(ROUND_STAGES[0]!.hp.maxValue);
     expect(game.stage?.drawPile).toHaveLength(20);
     expect(game.log.some((line) => line.includes("You chose Ice"))).toBe(true);
   });
@@ -145,8 +157,8 @@ describe("applyDraw and applyRelease", () => {
   });
 
   it("does not backfire on the second Unstable card when Earth is equipped", () => {
-    const earthy: Loadout = [crackedStaff, earth, pierce, null, null];
-    let game = stageGame(makeState({ drawPile: [unstable, unstable, num(5)] }), earthy);
+    const earthy: Loadout = [crackedStaff, pierce, null, null, null];
+    let game = stageGame(makeState({ drawPile: [unstable, unstable, num(5)] }), earthy, 0, earth);
 
     game = applyDraw(game);
     game = applyDraw(game);
@@ -178,14 +190,31 @@ describe("clearing and failing stages", () => {
     expect(game.log.some((line) => line.includes("gold"))).toBe(true);
   });
 
-  it("clearing the last stage wins the round", () => {
-    const last = ROUND_ONE.length - 1;
-    const game = drawThree(
+  it("opens a shop after the boss and starts a stronger next round afterward", () => {
+    const last = ROUND_STAGES.length - 1;
+    const shop = drawThree(
       stageGame(makeState({ targetHp: 84, drawPile: [num(5), unstable, num(3)] }), reference, last),
     );
 
-    expect(game.phase).toBe("won");
-    expect(applyNextStage(game)).toBe(game);
+    expect(shop.phase).toBe("shop");
+    expect(shop.roundNumber).toBe(1);
+    expect(shop.stageIndex).toBe(last);
+    expect(shop.shopOffers.length).toBeGreaterThan(0);
+    expect(shop.log.some((line) => line.includes("Visit the shop before Round 2"))).toBe(true);
+
+    const nextRound = applyNextStage(shop);
+
+    expect(nextRound.phase).toBe("stage");
+    expect(nextRound.roundNumber).toBe(2);
+    expect(nextRound.stageIndex).toBe(0);
+    expect(nextRound.stage?.name).toBe(ROUND_STAGES[0]?.name);
+    expect(nextRound.stage?.targetHp).toBeGreaterThanOrEqual(
+      ROUND_STAGES[0]!.hp.minValue + ROUND_STAGES[0]!.hpGrowthPerRound.minValue,
+    );
+    expect(nextRound.stage?.targetHp).toBeLessThanOrEqual(
+      ROUND_STAGES[0]!.hp.maxValue + ROUND_STAGES[0]!.hpGrowthPerRound.maxValue,
+    );
+    expect(nextRound.log.some((line) => line.includes("Round 2 · Stage 1/3"))).toBe(true);
   });
 
   it("running out of casts loses the run", () => {
@@ -205,9 +234,9 @@ describe("the reward screen", () => {
     expect(holding.pendingCard?.card).toBe(hex);
     expect(holding.phase).toBe("reward");
 
-    const placed = applySelectSlot(holding, 2);
+    const placed = applySelectSlot(holding, 1);
 
-    expect(placed.loadout[2]).toBe(hex);
+    expect(placed.loadout[1]).toBe(hex);
     expect(placed.pendingCard).toBe(null);
     expect(placed.phase).toBe("shop");
     expect(placed.shopOffers.length).toBeGreaterThan(0);
@@ -275,6 +304,35 @@ describe("the shop", () => {
     expect(applyBuy(game, 0)).toBe(game);
   });
 
+  it("sells any occupied loadout slot for 5 gold", () => {
+    const before = shopGame({ selectedSlot: 1 });
+    const sold = applySellCard(before, 0);
+
+    expect(sold.loadout[0]).toBe(null);
+    expect(sold.loadout[1]).toBe(pierce);
+    expect(sold.gold).toBe(100 + SELL_CARD_PRICE);
+    expect(sold.selectedSlot).toBe(null);
+    expect(sold.log.at(-1)).toContain(`for ${SELL_CARD_PRICE} gold`);
+  });
+
+  it("does not sell outside the shop, during a pending purchase, or from invalid slots", () => {
+    const game = shopGame();
+    const pending = applyBuy(game, 0);
+    const inStage = { ...game, phase: "stage" as const };
+
+    expect(applySellCard(inStage, 0)).toBe(inStage);
+    expect(applySellCard(pending, 0)).toBe(pending);
+    expect(applySellCard(game, -1)).toBe(game);
+    expect(applySellCard(game, game.unlockedSlots)).toBe(game);
+    expect(applySellCard(game, 2)).toBe(game);
+  });
+
+  it("cannot sell an element even if one is incorrectly present in a loadout", () => {
+    const game = shopGame({ loadout: [earth, null, null, null, null] });
+
+    expect(applySellCard(game, 0)).toBe(game);
+  });
+
   it("buying an Unstable removal changes the deck", () => {
     const game = applyBuy(shopGame(), 1);
 
@@ -298,10 +356,37 @@ describe("the shop", () => {
 
     expect(game.phase).toBe("stage");
     expect(game.stageIndex).toBe(1);
-    expect(game.stage?.name).toBe(ROUND_ONE[1]?.name);
+    expect(game.stage?.name).toBe(ROUND_STAGES[1]?.name);
+    expect(game.stage?.targetHp).toBeGreaterThanOrEqual(ROUND_STAGES[1]!.hp.minValue);
+    expect(game.stage?.targetHp).toBeLessThanOrEqual(ROUND_STAGES[1]!.hp.maxValue);
+    expect(game.stage?.rule).toBeNull();
     expect(game.stage?.status).toBe("ready");
     expect(game.stage?.drawPile).toHaveLength(21);
     expect(game.stage?.stacks).toEqual({});
+  });
+
+  it("chooses a seeded boss rule when entering the boss stage", () => {
+    const enteringBoss = shopGame({ stageIndex: 1, seed: 123 });
+    const game = applyNextStage(enteringBoss);
+    const replay = applyNextStage(enteringBoss);
+
+    expect(game.stageIndex).toBe(2);
+    expect(BOSS_RULES).toContainEqual(game.stage?.rule);
+    expect(game.log.at(-1)).toContain("Rule:");
+    expect(game).toEqual(replay);
+  });
+
+  it("adds a seeded HP increase to the boss in later rounds", () => {
+    const game = applyNextStage(shopGame({ stageIndex: 1, roundNumber: 2, seed: 42 }));
+    const boss = ROUND_STAGES.at(-1)!;
+
+    expect(game.stage?.name).toBe(boss.name);
+    expect(game.stage?.targetHp).toBeGreaterThanOrEqual(
+      boss.hp.minValue + boss.hpGrowthPerRound.minValue,
+    );
+    expect(game.stage?.targetHp).toBeLessThanOrEqual(
+      boss.hp.maxValue + boss.hpGrowthPerRound.maxValue,
+    );
   });
 
   it("cannot leave the shop while holding a card, or outside the shop", () => {
@@ -321,7 +406,7 @@ describe("reordering the loadout", () => {
     expect(game.selectedSlot).toBe(0);
 
     game = applySelectSlot(game, 2);
-    expect(game.loadout).toEqual([pierce, fire, crackedStaff, null, null]);
+    expect(game.loadout).toEqual([null, pierce, crackedStaff, null, null]);
     expect(game.selectedSlot).toBe(null);
     expect(game.log.at(-1)).toContain("Swapped slot 1");
   });
@@ -333,15 +418,15 @@ describe("reordering the loadout", () => {
     expect(game.loadout).toEqual(reference);
   });
 
-  it("changes the score: Pierce, Fire, Staff scores 64 instead of 84", () => {
+  it("changes the score when swapping the loadout cards around the fixed element", () => {
     let game = stageGame(makeState({ drawPile: [num(5), unstable, num(3)] }));
-    game = applySelectSlot(applySelectSlot(game, 0), 2); // Pierce, Fire, Staff
+    game = applySelectSlot(applySelectSlot(game, 0), 2); // fixed Fire, then Pierce, then Staff
 
     for (let i = 0; i < 3; i++) {
       game = applyDraw(game);
     }
-    // 16 ×1.5 = 24, +20 = 44, +20 = 64
-    expect(applyRelease(game).stage?.totalDamage).toBe(64);
+    // 16 +20 = 36, ×1.5 = 54, +20 = 74
+    expect(applyRelease(game).stage?.totalDamage).toBe(74);
   });
 
   it("is blocked while the channel has cards", () => {
@@ -359,8 +444,12 @@ describe("reordering the loadout", () => {
 
 describe("rulesFor", () => {
   it("combines the loadout and the stage rule", () => {
-    const earthy: Loadout = [null, earth, null, null, null];
-    const game = stageGame(makeState({ rule: { kind: "multiplierCap", max: 2 } }), earthy);
+    const game = stageGame(
+      makeState({ rule: { kind: "multiplierCap", max: 2 } }),
+      [null, null, null, null, null],
+      0,
+      earth,
+    );
     const rules = rulesFor(game);
 
     expect(rules.unstableLimit).toBe(3);
@@ -373,7 +462,7 @@ describe("a whole run", () => {
     for (const seed of [1, 42, 777]) {
       let game = applyPick(createGame(seed), "fire");
 
-      for (let step = 0; step < 1000 && game.phase !== "won" && game.phase !== "lost"; step++) {
+      for (let step = 0; step < 1000 && game.phase !== "lost"; step++) {
         if (game.phase === "reward") {
           game = applySkipReward(game);
         } else if (game.phase === "shop") {
@@ -385,14 +474,14 @@ describe("a whole run", () => {
         }
       }
 
-      expect(["won", "lost"]).toContain(game.phase);
+      expect(game.phase).toBe("lost");
     }
   });
 
   it("can also be played taking rewards and buying in every shop", () => {
     let game = applyPick(createGame(5), "earth");
 
-    for (let step = 0; step < 1000 && game.phase !== "won" && game.phase !== "lost"; step++) {
+    for (let step = 0; step < 1000 && game.phase !== "lost"; step++) {
       if (game.phase === "reward") {
         // take the deck change (the last option) so no slot has to be chosen
         game = applyChooseReward(game, game.rewardOptions.length - 1);
@@ -406,6 +495,6 @@ describe("a whole run", () => {
       }
     }
 
-    expect(["won", "lost"]).toContain(game.phase);
+    expect(game.phase).toBe("lost");
   });
 });

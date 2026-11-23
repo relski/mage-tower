@@ -9,6 +9,13 @@
   --accent: #7c3aed;
   --win: #15803d;
   --lose: #b91c1c;
+  --channel-value-bg: #dbeafe;
+  --channel-value-border: #3b82f6;
+  --channel-value-text: #1e3a8a;
+  --channel-unstable-bg: linear-gradient(135deg, #d4d4d8, #fafafa 48%, #a1a1aa);
+  --channel-unstable-border: #a1a1aa;
+  --channel-unstable-text: #3f3f46;
+  --backfire-border: #dc2626;
 
   --mono: ui-monospace, "SF Mono", Consolas, monospace;
 
@@ -28,6 +35,13 @@
     --accent: #c084fc;
     --win: #4ade80;
     --lose: #f87171;
+    --channel-value-bg: #172554;
+    --channel-value-border: #60a5fa;
+    --channel-value-text: #bfdbfe;
+    --channel-unstable-bg: linear-gradient(135deg, #52525b, #a1a1aa 48%, #3f3f46);
+    --channel-unstable-border: #a1a1aa;
+    --channel-unstable-text: #18181b;
+    --backfire-border: #ef4444;
   }
 }
 
@@ -70,6 +84,57 @@ p {
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 6px;
+}
+
+.channel-panel.backfire {
+  border: 2px solid var(--backfire-border);
+  box-shadow: 0 0 0 1px var(--backfire-border);
+}
+
+.channel-cards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.channel-card {
+  display: grid;
+  place-items: center;
+  min-width: 48px;
+  min-height: 48px;
+  padding: 4px 10px;
+  border: 1px solid;
+  border-radius: 6px;
+  font-weight: bold;
+}
+
+.channel-card.number {
+  color: var(--channel-value-text);
+  background: var(--channel-value-bg);
+  border-color: var(--channel-value-border);
+}
+
+.channel-card.unstable {
+  color: var(--channel-unstable-text);
+  background: var(--channel-unstable-bg);
+  border-color: var(--channel-unstable-border);
+}
+
+.channel-stats {
+  margin-top: 8px;
+}
+
+.damage-meter {
+  display: grid;
+  gap: 4px;
+  margin: 4px 0;
+}
+
+.damage-meter meter {
+  width: 100%;
+  height: 1rem;
+  accent-color: var(--win);
 }
 
 pre {

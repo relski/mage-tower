@@ -1,25 +1,23 @@
 import { describe, expect, it } from "vitest";
-import { createStartingLoadout, swapSlots } from "./loadout";
+import { cardsInEffectOrder, createStartingLoadout, swapSlots } from "./loadout";
 import type { Loadout } from "./types";
-import { earth, fire } from "../data/cards/elements";
+import { fire } from "../data/cards/elements";
 import { ITEMS, crackedStaff } from "../data/cards/items";
 import { MODIFIERS, pierce } from "../data/cards/modifiers";
 
 describe("createStartingLoadout", () => {
-  it("builds item, element, modifier and two empty slots", () => {
-    const { loadout } = createStartingLoadout(fire, MODIFIERS, ITEMS, 123);
+  it("builds item, modifier and three empty slots", () => {
+    const { loadout } = createStartingLoadout(MODIFIERS, ITEMS, 123);
 
     expect(loadout).toHaveLength(5);
     expect(loadout[0]?.type).toBe("item");
-    expect(loadout[1]).toBe(fire);
-    expect(loadout[2]?.type).toBe("modifier");
-    expect(loadout[3]).toBe(null);
-    expect(loadout[4]).toBe(null);
+    expect(loadout[1]?.type).toBe("modifier");
+    expect(loadout.slice(2)).toEqual([null, null, null]);
   });
 
   it("is repeatable for the same seed and returns the next seed", () => {
-    const a = createStartingLoadout(earth, MODIFIERS, ITEMS, 123);
-    const b = createStartingLoadout(earth, MODIFIERS, ITEMS, 123);
+    const a = createStartingLoadout(MODIFIERS, ITEMS, 123);
+    const b = createStartingLoadout(MODIFIERS, ITEMS, 123);
 
     expect(a).toEqual(b);
     expect(a.seed).not.toBe(123);
@@ -27,10 +25,10 @@ describe("createStartingLoadout", () => {
 
   it("picks from the given pools only", () => {
     for (let seed = 1; seed <= 50; seed++) {
-      const { loadout } = createStartingLoadout(fire, [pierce], [crackedStaff], seed);
+      const { loadout } = createStartingLoadout([pierce], [crackedStaff], seed);
 
       expect(loadout[0]).toBe(crackedStaff);
-      expect(loadout[2]).toBe(pierce);
+      expect(loadout[1]).toBe(pierce);
     }
   });
 
@@ -39,8 +37,8 @@ describe("createStartingLoadout", () => {
     const items = new Set<string>();
 
     for (let seed = 1; seed <= 200; seed++) {
-      const { loadout } = createStartingLoadout(fire, MODIFIERS, ITEMS, seed);
-      modifiers.add(loadout[2]?.id ?? "");
+      const { loadout } = createStartingLoadout(MODIFIERS, ITEMS, seed);
+      modifiers.add(loadout[1]?.id ?? "");
       items.add(loadout[0]?.id ?? "");
     }
 
@@ -49,22 +47,35 @@ describe("createStartingLoadout", () => {
   });
 
   it("throws when a pool is empty", () => {
-    expect(() => createStartingLoadout(fire, [], ITEMS, 1)).toThrow();
+    expect(() => createStartingLoadout([], ITEMS, 1)).toThrow();
+  });
+});
+
+describe("cardsInEffectOrder", () => {
+  it("keeps the fixed element between the first and second loadout slots", () => {
+    expect(cardsInEffectOrder([crackedStaff, pierce, null, null, null], fire)).toEqual([
+      crackedStaff,
+      fire,
+      pierce,
+      null,
+      null,
+      null,
+    ]);
   });
 });
 
 describe("swapSlots", () => {
-  const loadout: Loadout = [crackedStaff, fire, pierce, null, null];
+  const loadout: Loadout = [crackedStaff, pierce, null, null, null];
 
   it("swaps two slots into a new loadout", () => {
     const swapped = swapSlots(loadout, 0, 2);
 
-    expect(swapped).toEqual([pierce, fire, crackedStaff, null, null]);
-    expect(loadout).toEqual([crackedStaff, fire, pierce, null, null]);
+    expect(swapped).toEqual([null, pierce, crackedStaff, null, null]);
+    expect(loadout).toEqual([crackedStaff, pierce, null, null, null]);
   });
 
   it("can move a card into an empty slot", () => {
-    expect(swapSlots(loadout, 1, 4)).toEqual([crackedStaff, null, pierce, null, fire]);
+    expect(swapSlots(loadout, 1, 4)).toEqual([crackedStaff, null, null, null, pierce]);
   });
 
   it("throws for slots that do not exist", () => {

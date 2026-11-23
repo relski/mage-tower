@@ -1,9 +1,10 @@
 import type {
   CastResult,
+  Card,
   ChannelCard,
   ChannelRules,
   Loadout,
-  StageConfig,
+  StageSetup,
   StageState,
   StageStatus,
 } from "./types";
@@ -20,7 +21,7 @@ export type DrawResult = {
 
 // builds a fresh stage: the deck is shuffled with the seed and the stage starts "ready"
 export function createStage(
-  config: StageConfig,
+  config: StageSetup,
   deck: readonly ChannelCard[],
   seed: number,
 ): StageState {
@@ -47,7 +48,7 @@ function isOver(state: StageState): boolean {
 }
 
 // can the player draw another card right now?
-// rules come from getChannelRules(loadout, state.rule); they default to the plain rules
+// the caller supplies rules built from the element, loadout and stage rule
 export function canDraw(
   state: StageState,
   rules: ChannelRules = DEFAULT_CHANNEL_RULES,
@@ -95,7 +96,11 @@ export function drawIntoChannel(
 
 // releases the channel: scores the cast, then does the stage bookkeeping.
 // This is the only place that changes castNumber and castsRemaining.
-export function releaseCast(state: StageState, loadout: Loadout): CastResult {
+export function releaseCast(
+  state: StageState,
+  loadout: Loadout,
+  element: Card | null = null,
+): CastResult {
   if (isOver(state)) {
     throw new Error("Cannot release: the stage is over");
   }
@@ -104,7 +109,7 @@ export function releaseCast(state: StageState, loadout: Loadout): CastResult {
     throw new Error("Cannot release: the channel is empty");
   }
 
-  const result = resolveCast(loadout, state);
+  const result = resolveCast(loadout, state, element);
 
   const totalDamage = state.totalDamage + result.score;
   const castsRemaining = state.castsRemaining - 1;

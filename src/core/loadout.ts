@@ -3,10 +3,16 @@ import { pickRandom } from "./rng";
 
 export const SLOT_COUNT = 5;
 
-// the starting loadout: the chosen element, a random modifier and a random item.
-// Slot order is item, element, modifier; the last two slots start empty.
+// The element stays outside the loadout but keeps its original position between slot 1 and slot 2.
+export function cardsInEffectOrder(loadout: Loadout, element: Card | null): (Card | null)[] {
+  const cards = [...loadout];
+  cards.splice(1, 0, element);
+
+  return cards;
+}
+
+// the starting loadout: a random item and modifier, followed by three empty slots
 export function createStartingLoadout(
-  element: Card,
   modifiers: readonly Card[],
   items: readonly Card[],
   seed: number,
@@ -15,7 +21,7 @@ export function createStartingLoadout(
   const item = pickRandom(items, modifier.seed);
 
   return {
-    loadout: [item.value, element, modifier.value, null, null],
+    loadout: [item.value, modifier.value, null, null, null],
     seed: item.seed,
   };
 }

@@ -7,12 +7,12 @@ import { fire } from "../data/cards/elements";
 import { crackedStaff } from "../data/cards/items";
 import { pierce } from "../data/cards/modifiers";
 
-const loadout: Loadout = [crackedStaff, fire, pierce, null, null];
+const loadout: Loadout = [crackedStaff, pierce, null, null, null];
 
 describe("resolveCast: reference casts", () => {
   it("scores cast 1 (draw 5, Unstable, 3) as 84", () => {
     const state = makeState({ channel: [num(5), unstable, num(3)] });
-    const result = resolveCast(loadout, state);
+    const result = resolveCast(loadout, state, fire);
 
     expect(result.score).toBe(84);
     expect(result.backfired).toBe(false);
@@ -25,31 +25,31 @@ describe("resolveCast: reference casts", () => {
     expect(result.nextState.stacks).toEqual({ burn: 1 });
   });
 
-  it("scores cast 2 (one burn stack, draw 4, 4) as 57", () => {
+  it("scores cast 2 (one burn stack, draw 4, 4) as 52", () => {
     const state = makeState({
       castNumber: 2,
       stacks: { burn: 1 },
       channel: [num(4), num(4)],
     });
-    const result = resolveCast(loadout, state);
+    const result = resolveCast(loadout, state, fire);
 
-    expect(result.score).toBe(57);
-    expect(result.trace.map((step) => step.total)).toEqual([12, 32, 38, 38, 57]);
+    expect(result.score).toBe(52);
+    expect(result.trace.map((step) => step.total)).toEqual([12, 32, 35, 35, 52]);
     expect(result.nextState.stacks).toEqual({ burn: 2 });
   });
 
-  it("scores 74 when the loadout is reordered to Fire, Pierce, Staff", () => {
-    const reordered: Loadout = [fire, pierce, crackedStaff, null, null];
+  it("scores 64 when the item and modifier are reordered around the fixed element", () => {
+    const reordered: Loadout = [pierce, crackedStaff, null, null, null];
     const state = makeState({ channel: [num(5), unstable, num(3)] });
 
-    expect(resolveCast(reordered, state).score).toBe(74);
+    expect(resolveCast(reordered, state, fire).score).toBe(64);
   });
 });
 
 describe("resolveCast: backfire", () => {
   it("scores 0 when the second Unstable card is drawn", () => {
     const state = makeState({ channel: [unstable, unstable] });
-    const result = resolveCast(loadout, state);
+    const result = resolveCast(loadout, state, fire);
 
     expect(result.score).toBe(0);
     expect(result.backfired).toBe(true);
@@ -58,7 +58,7 @@ describe("resolveCast: backfire", () => {
 
   it("does not trigger the loadout on a backfire", () => {
     const state = makeState({ channel: [num(5), unstable, unstable] });
-    const result = resolveCast(loadout, state);
+    const result = resolveCast(loadout, state, fire);
 
     expect(result.score).toBe(0);
     expect(result.nextState.stacks).toEqual({});
@@ -67,10 +67,10 @@ describe("resolveCast: backfire", () => {
 
 describe("resolveCast: rules", () => {
   it("skips empty slots", () => {
-    const gaps: Loadout = [null, crackedStaff, null, fire, pierce];
+    const gaps: Loadout = [crackedStaff, null, null, pierce, null];
     const state = makeState({ channel: [num(5), unstable, num(3)] });
 
-    expect(resolveCast(gaps, state).score).toBe(84);
+    expect(resolveCast(gaps, state, fire).score).toBe(84);
   });
 
   it("rounds down after every multiplication", () => {
@@ -84,7 +84,7 @@ describe("resolveCast: rules", () => {
     const state = makeState({ channel: [num(5), unstable, num(3)] });
     const before = structuredClone(state);
 
-    resolveCast(loadout, state);
+    resolveCast(loadout, state, fire);
 
     expect(state).toEqual(before);
   });

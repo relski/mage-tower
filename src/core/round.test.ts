@@ -8,16 +8,17 @@ import {
   shouldAutoRelease,
 } from "./round";
 import { makeState, num, unstable } from "./test-helpers";
-import type { ChannelRules, Loadout, StageConfig } from "./types";
+import type { ChannelRules, Loadout, StageSetup } from "./types";
 import { fire } from "../data/cards/elements";
 import { crackedStaff } from "../data/cards/items";
 import { pierce } from "../data/cards/modifiers";
 import { createStartingDeck } from "../data/channel-deck";
 import { DEFAULT_CHANNEL_RULES } from "../data/tuning";
 
-const loadout: Loadout = [crackedStaff, fire, pierce, null, null];
+const loadout: Loadout = [crackedStaff, pierce, null, null, null];
+const release = (state: ReturnType<typeof makeState>) => releaseCast(state, loadout, fire);
 
-const config: StageConfig = { name: "Test Goblin", hp: 150, casts: 4, rule: null };
+const config: StageSetup = { name: "Test Goblin", hp: 150, casts: 4, rule: null };
 
 const roomy: ChannelRules = { ...DEFAULT_CHANNEL_RULES, unstableLimit: 3 };
 
@@ -138,7 +139,7 @@ describe("releaseCast", () => {
       channel: [num(5), unstable, num(3)],
       drawPile: [num(1), num(2)],
     });
-    const result = releaseCast(state, loadout);
+    const result = release(state);
 
     expect(result.score).toBe(84);
     expect(result.nextState.totalDamage).toBe(84);
@@ -154,7 +155,7 @@ describe("releaseCast", () => {
   it("clears the stage when the damage reaches the target", () => {
     const state = makeState({ targetHp: 84, channel: [num(5), unstable, num(3)] });
 
-    expect(releaseCast(state, loadout).nextState.status).toBe("cleared");
+    expect(release(state).nextState.status).toBe("cleared");
   });
 
   it("fails the stage when the casts run out before the target", () => {
@@ -164,12 +165,12 @@ describe("releaseCast", () => {
       channel: [num(5), unstable, num(3)],
     });
 
-    expect(releaseCast(state, loadout).nextState.status).toBe("failed");
+    expect(release(state).nextState.status).toBe("failed");
   });
 
   it("uses up the cast on a backfire", () => {
     const state = makeState({ channel: [unstable, unstable] });
-    const result = releaseCast(state, loadout);
+    const result = release(state);
 
     expect(result.backfired).toBe(true);
     expect(result.score).toBe(0);
@@ -183,15 +184,15 @@ describe("releaseCast", () => {
     const state = makeState({ channel: [num(5), unstable, num(3)] });
     const before = structuredClone(state);
 
-    releaseCast(state, loadout);
+    release(state);
 
     expect(state).toEqual(before);
   });
 
   it("throws on an empty channel and once the stage is over", () => {
-    expect(() => releaseCast(makeState(), loadout)).toThrow();
+    expect(() => release(makeState())).toThrow();
     expect(() =>
-      releaseCast(makeState({ status: "cleared", channel: [num(1)] }), loadout),
+      release(makeState({ status: "cleared", channel: [num(1)] })),
     ).toThrow();
   });
 });
@@ -206,7 +207,7 @@ describe("a stage over several casts", () => {
     for (let i = 0; i < 3; i++) {
       stage = drawIntoChannel(stage).nextState;
     }
-    stage = releaseCast(stage, loadout).nextState;
+    stage = release(stage).nextState;
 
     expect(stage.drawPile).toEqual([num(4), num(4)]);
     expect(stage.discardPile).toEqual([num(5), unstable, num(3)]);
@@ -215,9 +216,9 @@ describe("a stage over several casts", () => {
     for (let i = 0; i < 2; i++) {
       stage = drawIntoChannel(stage).nextState;
     }
-    stage = releaseCast(stage, loadout).nextState;
+    stage = release(stage).nextState;
 
-    expect(stage.totalDamage).toBe(84 + 57);
+    expect(stage.totalDamage).toBe(84 + 52);
     expect(stage.castsRemaining).toBe(2);
     expect(stage.castNumber).toBe(3);
     expect(stage.drawPile).toEqual([]);

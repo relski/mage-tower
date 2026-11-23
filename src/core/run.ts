@@ -196,6 +196,10 @@ export function placeCard(
   slot: number,
   unlockedSlots: number,
 ): { loadout: Loadout; replaced: Card | null } {
+  if (card.type === "element") {
+    throw new Error("Elements cannot be placed in the loadout");
+  }
+
   if (!Number.isInteger(slot) || slot < 0 || slot >= unlockedSlots) {
     throw new Error(`Slot ${slot} is not an unlocked slot`);
   }

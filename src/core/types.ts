@@ -33,11 +33,13 @@ export type ChannelCard =
 
 export type StageStatus = "ready" | "casting" | "cleared" | "failed";
 
-// a special rule for one stage (boss rules)
+// boss stage rules
 export type StageRule =
   | { kind: "unstableLimitDelta", value: number }   // negative = backfire sooner
   | { kind: "multiplierCap", max: number }          // channel multiplier cannot go above this
   | { kind: "halfValueAbove", threshold: number };  // number cards above this count as half value
+
+export type IntegerRange = { minValue: number, maxValue: number };
 
 // the rules that apply to the channel during a stage: defaults, plus the loadout, plus the stage rule
 export type ChannelRules = {
@@ -61,7 +63,15 @@ export type StageState = {
   seed: number,  // RNG state: pass it to nextRandom/shuffle and keep the seed they return
 };
 
-export type StageConfig = { name: string, hp: number, casts: number, rule: StageRule | null };
+export type StageConfig = {
+  name: string,
+  hp: IntegerRange,
+  hpGrowthPerRound: IntegerRange,
+  casts: number,
+  rule: StageRule | null,
+};
+
+export type StageSetup = { name: string, hp: number, casts: number, rule: StageRule | null };
 
 export type TraceStep = { source: string, description: string, total: number };
 export type CastResult = {

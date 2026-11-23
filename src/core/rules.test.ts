@@ -8,7 +8,7 @@ import {
 import { describeRule, getChannelRules } from "./rules";
 import { makeState, num, unstable } from "./test-helpers";
 import type { ChannelRules, Loadout } from "./types";
-import { earth, fire } from "../data/cards/elements";
+import { earth } from "../data/cards/elements";
 import { DEFAULT_CHANNEL_RULES, UNSTABLE_LIMIT } from "../data/tuning";
 
 const none: Loadout = [null, null, null, null, null];
@@ -18,18 +18,17 @@ describe("getChannelRules", () => {
     expect(getChannelRules(none, null)).toEqual(DEFAULT_CHANNEL_RULES);
   });
 
-  it("adds Unstable tolerance from the loadout (Earth)", () => {
-    const rules = getChannelRules([fire, earth, null, null, null], null);
+  it("adds Unstable tolerance from the fixed element (Earth)", () => {
+    const rules = getChannelRules(none, null, earth);
 
     expect(rules.unstableLimit).toBe(UNSTABLE_LIMIT + 1);
   });
 
-  it("applies a stage rule on top of the loadout", () => {
-    const loadout: Loadout = [earth, null, null, null, null];
+  it("applies a stage rule on top of the fixed element", () => {
 
-    expect(getChannelRules(loadout, { kind: "unstableLimitDelta", value: -1 }).unstableLimit).toBe(
-      UNSTABLE_LIMIT,
-    );
+    expect(
+      getChannelRules(none, { kind: "unstableLimitDelta", value: -1 }, earth).unstableLimit,
+    ).toBe(UNSTABLE_LIMIT);
     expect(getChannelRules(none, { kind: "multiplierCap", max: 2 }).multiplierCap).toBe(2);
     expect(getChannelRules(none, { kind: "halfValueAbove", threshold: 5 }).halfValueAbove).toBe(5);
   });

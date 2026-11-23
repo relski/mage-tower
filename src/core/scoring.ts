@@ -1,6 +1,7 @@
 import type {
   Action,
   CastResult,
+  Card,
   ChannelCard,
   Loadout,
   StageState,
@@ -8,6 +9,7 @@ import type {
   Trigger,
 } from "./types";
 import { channelMultiplier, channelPower, isBackfired, unstableCount } from "./channel";
+import { cardsInEffectOrder } from "./loadout";
 import { nextRandom } from "./rng";
 import { getChannelRules } from "./rules";
 
@@ -83,17 +85,21 @@ function applyAction(
   }
 }
 
-// resolves one cast: the channel gives the starting damage, then the loadout
-// triggers left to right on the running total. Only stacks and the seed change in nextState;
+// resolves one cast: the channel gives the starting damage, then slot 1, the element,
+// and slots 2 through 5 trigger in order. Only stacks and the seed change in nextState;
 // the stage bookkeeping (damage, casts, discard) happens in round.ts.
-export function resolveCast(loadout: Loadout, state: StageState): CastResult {
+export function resolveCast(
+  loadout: Loadout,
+  state: StageState,
+  element: Card | null = null,
+): CastResult {
   const { channel } = state;
 
   if (channel.length === 0) {
     throw new Error("Cannot cast with an empty channel");
   }
 
-  const rules = getChannelRules(loadout, state.rule);
+  const rules = getChannelRules(loadout, state.rule, element);
 
   if (isBackfired(channel, rules)) {
     return {
@@ -126,7 +132,7 @@ export function resolveCast(loadout: Loadout, state: StageState): CastResult {
     },
   ];
 
-  for (const card of loadout) {
+  for (const card of cardsInEffectOrder(loadout, element)) {
     if (card === null) {
       continue;
     }

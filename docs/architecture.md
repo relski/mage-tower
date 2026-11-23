@@ -18,14 +18,14 @@ mage-tower/
    ├─ main.ts                 entry point, mounts the app
    ├─ style.css               styles for the text prototype
    ├─ core/                   pure TypeScript, no DOM, fully testable
-   │  ├─ types.ts             Card, Effect, Loadout, ChannelCard, ChannelRules, StageRule, StageState, CastResult
+   │  ├─ types.ts             Card, Effect, Loadout, ChannelCard, ChannelRules, StageRule, StageConfig, StageSetup, StageState, CastResult
    │  ├─ channel.ts           channel helpers (power, multiplier, backfire) and drawCard
-   │  ├─ rules.ts             getChannelRules (defaults + loadout + stage rule) and describeRule
-   │  ├─ scoring.ts           resolveCast: channel result + loadout → score + trace
+   │  ├─ rules.ts             getChannelRules (defaults + element + loadout + stage rule) and describeRule
+   │  ├─ scoring.ts           resolveCast: channel result + fixed element + loadout → score + trace
    │  ├─ round.ts             stage state machine: createStage, canDraw, drawIntoChannel, releaseCast
    │  ├─ loadout.ts           starting loadout, slot swapping, SLOT_COUNT
    │  ├─ run.ts               rewards, shop offers, deck changes, placing cards, gold for a stage
-   │  ├─ rng.ts               seeded random generator: nextRandom, shuffle, pickRandom
+   │  ├─ rng.ts               seeded random generator: nextRandom, randomInteger, shuffle, pickRandom
    │  ├─ test-helpers.ts      makeState, num, unstable (tests only)
    │  └─ *.test.ts            channel, rules, scoring, round, loadout, run, rng, rng-pick
    ├─ data/                   content as plain data, no logic
@@ -37,7 +37,7 @@ mage-tower/
    │  ├─ stages/
    │  │  ├─ enemies.ts        goblin scout, stone ogre
    │  │  ├─ bosses.ts         tower warden and its rule
-   │  │  └─ rounds.ts         ROUND_ONE: the three stages in order
+   │  │  └─ rounds.ts         ROUND_STAGES: the three stages repeated each round
    │  ├─ channel-deck.ts      createStartingDeck (14 numbers, 6 Unstable)
    │  └─ tuning.ts            multiplier steps, Unstable limit, default channel rules, gold, prices, slots
    ├─ state/
@@ -57,13 +57,13 @@ The tree should be updated when the structure changes.
 
 1. **Dependencies point one way:** `ui → state → core`. Nothing in `core` imports from `ui` or `state`, and nothing in `core` touches the DOM. `core` reads its tuning numbers from `data/tuning.ts`, and files in `data/` import only types from `core`.
 2. **Cards are data, not code.** An effect is a small declarative object that the engine interprets. Adding a card means adding an entry in `data/`, not changing the engine.
-3. **Two kinds of cards, two types.** Loadout cards (`Card`: element, modifier, item) amplify casts. Channel cards (`ChannelCard`: number, unstable) are drawn each cast. Never mix them in one type.
+3. **Two kinds of cards, two types.** `Card` data has element, modifier and item types, but only modifiers and items occupy loadout slots. The chosen element is stored separately and stays fixed for the run. Channel cards (`ChannelCard`: number, unstable) are drawn each cast. Never mix them in one type.
 4. **The scoring engine returns a trace.** `resolveCast` returns the final score and a step-by-step trace of what happened, starting with the channel step. The UI animates the trace and never computes scores itself, so what is shown cannot drift from the real result.
-5. **Scoring uses a running total.** The channel gives a starting total (power × multiplier). Loadout cards then act on that running total left to right, and a multiply step applies to the total at that moment. There is a single running damage total, with no separate chips and mult. Scores are whole numbers (round down after each multiplication). The engine must never reorder slots.
+5. **Scoring uses a running total.** The channel gives a starting total (power × multiplier). Loadout cards act on that running total left to right, with the fixed element inserted between loadout slots 1 and 2. A multiply step applies to the total at that moment. There is a single running damage total, with no separate chips and mult. Scores are whole numbers (round down after each multiplication). The engine must never reorder slots.
 6. **Tuning numbers live in `data/`.** HP, cast limits, multiplier steps, deck contents, gold and prices can be rebalanced without touching engine code.
-7. **All randomness goes through `rng.ts` with a seed.** That covers shuffling the channel deck, random modifier and item picks, rewards, shop offers, and chance triggers. The RNG state is stored in `StageState.seed` and `Game.seed`, so everything is reproducible in tests. The only place a seed comes from the clock is the store, when it starts a new game.
+7. **All randomness goes through `rng.ts` with a seed.** That covers shuffling the channel deck, random starting modifier and item picks, rewards, shop offers, and chance triggers. The RNG state is stored in `StageState.seed` and `Game.seed`, so everything is reproducible in tests. The only place a seed comes from the clock is the store, when it starts a new game.
 8. **Core functions do not mutate their inputs.** They take the current state and return the next state, which keeps tests simple and makes undo or replays possible later.
-9. **Channel rules come from one place.** `getChannelRules(loadout, stageRule)` builds the effective Unstable limit, multiplier cap and half-value threshold. `channel.ts`, `round.ts` and `scoring.ts` take those rules as an argument and default to the plain rules.
+9. **Channel rules come from one place.** `getChannelRules(loadout, stageRule, element)` builds the effective Unstable limit, multiplier cap and half-value threshold from the fixed element, loadout and stage rule. `channel.ts`, `round.ts` and `scoring.ts` take those rules as an argument and default to the plain rules.
 10. **Stage bookkeeping has one owner.** Only `releaseCast` in `round.ts` changes `castNumber` and `castsRemaining`, moves the channel to the discard pile, and sets the stage status.
 
 ## Core types
@@ -98,7 +98,7 @@ export type Card = {
   effects: Effect[],
 };
 
-export type Loadout = (Card | null)[]; // length 5
+export type Loadout = (Card | null)[]; // length 5; only modifiers and items may be placed
 
 export type ChannelCard =
   | { kind: "number", value: number }
@@ -110,6 +110,8 @@ export type StageRule =
   | { kind: "unstableLimitDelta", value: number }   // negative = backfire sooner
   | { kind: "multiplierCap", max: number }
   | { kind: "halfValueAbove", threshold: number };
+
+export type IntegerRange = { minValue: number, maxValue: number };
 
 export type ChannelRules = {
   unstableLimit: number,
@@ -132,7 +134,15 @@ export type StageState = {
   seed: number,             // RNG state
 };
 
-export type StageConfig = { name: string, hp: number, casts: number, rule: StageRule | null };
+export type StageConfig = {
+  name: string,
+  hp: IntegerRange,
+  hpGrowthPerRound: IntegerRange,
+  casts: number,
+  rule: StageRule | null,
+};
+
+export type StageSetup = { name: string, hp: number, casts: number, rule: StageRule | null };
 
 export type TraceStep = { source: string, description: string, total: number };
 export type CastResult = {
@@ -146,36 +156,36 @@ export type CastResult = {
 Notes:
 
 - `Trigger` and `Action` are unions because each member has different fields, and the `kind` field lets TypeScript narrow the type in a `switch`. The `switch` statements over them are exhaustive, so adding a new kind makes the compiler point to every place that needs a case.
-- `addUnstableTolerance` is a channel rule. `getChannelRules` reads it from the loadout (only from effects with the `always` trigger), and scoring ignores it.
+- `addUnstableTolerance` is a channel rule. `getChannelRules` reads it from the fixed element and loadout (only from effects with the `always` trigger), and scoring ignores it.
 - `core/run.ts` adds `RewardOption` and `ShopOffer`, and `state/game.ts` adds `Phase`, `PendingCard` and `Game`.
 
-Example: Fire is `+20 damage`, then `+6 damage per burn stack`, then `add burn stack`, all expressed as data.
+Example: Fire is `+20 damage`, then `+3 damage per burn stack`, then `add burn stack`, all expressed as data.
 
 ## Casting flow
 
-1. `getChannelRules(loadout, stage.rule)` gives the rules for this stage.
+1. `getChannelRules(loadout, stage.rule, element)` gives the rules for this stage.
 2. `canDraw`, `drawIntoChannel` and `drawCard` use the rules: `drawCard` moves the top card of the draw pile into the channel and reports whether it caused a backfire. It never draws past 5 cards, after a backfire, or from an empty pile.
 3. `shouldAutoRelease` says when the channel must release by itself (full, or backfired).
-4. `releaseCast(state, loadout)` calls `resolveCast`, which computes the starting total (`channelPower` × `channelMultiplier`), then runs the loadout left to right and returns a `CastResult`. A backfire returns a score of 0 with a trace that says why. `releaseCast` then adds the damage, moves the channel to the discard pile, updates `castNumber` and `castsRemaining`, and sets the status to `cleared` or `failed` when it applies.
+4. `releaseCast(state, loadout, element)` calls `resolveCast`, which computes the starting total (`channelPower` × `channelMultiplier`), then runs slot 1, the fixed element, and slots 2 through 5 in order, returning a `CastResult`. A backfire returns a score of 0 with a trace that says why. `releaseCast` then adds the damage, moves the channel to the discard pile, updates `castNumber` and `castsRemaining`, and sets the status to `cleared` or `failed` when it applies.
 5. Chance triggers roll `nextRandom(state.seed)` inside `resolveCast`, and the next seed is returned in `nextState`.
 
 ## Game state and phases
 
-`state/game.ts` holds the `Game` and the rules of the run flow. The `apply*` functions are pure (a game in, a game out), and the store functions (`draw`, `release`, `pick`, and so on) call them and notify the UI.
+`state/game.ts` holds the `Game`, including the current round number, and the rules of the run flow. The `apply*` functions are pure (a game in, a game out), and the store functions (`draw`, `release`, `pick`, and so on) call them and notify the UI.
 
 ```
-pick ──applyPick──▶ stage ──clear (not last)──▶ reward ──pick or skip──▶ shop ──next stage──▶ stage ...
-                       │                                                                       
-                       ├──clear (last stage)──▶ won
-                       └──out of casts────────▶ lost
+pick ──applyPick──▶ stage ──clear (not boss)──▶ reward ──pick or skip──▶ shop ──next stage──▶ stage ...
+                       │
+                       ├──clear (boss)──▶ shop ──begin round──▶ next round, stage 1
+                       └──out of casts──▶ lost
 ```
 
-- **pick:** choose the element. `applyPick` builds the starting loadout and the first stage.
-- **stage:** `applyDraw` and `applyRelease` play the casts (with auto-release). Clearing a stage pays gold and creates the reward options.
+- **pick:** choose the immutable element. `applyPick` stores it outside the loadout, picks a random modifier and item for slots 2 and 1 respectively, and starts the first stage.
+- **stage:** `applyDraw` and `applyRelease` play the casts (with auto-release). Each stage start rolls HP from its configured range and adds seeded growth for later rounds. Clearing a non-boss stage pays gold and creates the reward options.
 - **reward:** `applyChooseReward` or `applySkipReward`. A card reward becomes a `pendingCard` that waits for a slot.
-- **shop:** `applyBuy`, then `applyNextStage` to start the next stage with the run's deck.
+- **shop:** `applyBuy` and `applySellCard` handle purchases and sales; then `applyNextStage` starts the next stage with the run's deck. Any modifier or item in an unlocked slot sells for 5 gold. Clearing the boss opens the shop again before the next round.
 - **Slots:** `applySelectSlot` places a pending card (into an unlocked slot) or swaps two slots. Swapping is only allowed on the stage, reward and shop screens, and on the stage screen only while the channel is empty.
-- **won / lost:** `restart` starts a new game.
+- **lost:** `restart` starts a new game.
 
 ## UI
 
@@ -197,9 +207,9 @@ pick ──applyPick──▶ stage ──clear (not last)──▶ reward ─�
 
 ## First test cases
 
-The reference casts from the overview. With the loadout Cracked Staff, Fire, Pierce:
+The reference casts from the overview. With Cracked Staff in slot 1, fixed Fire, and Pierce in slot 2:
 
 - Cast 1 (draw 5, Unstable, 3) scores **84**.
-- Cast 2 (one burn stack, draw 4, 4) scores **57**.
-- With the loadout reordered to Fire, Pierce, Staff, cast 1 scores **74**, which proves slot order matters.
+- Cast 2 (one burn stack, draw 4, 4) scores **52**.
+- With Pierce in slot 1 and Staff in slot 2, the fixed Fire remains between them and cast 1 scores **64**, which proves slot order matters without making the element movable.
 - Drawing a second Unstable card in one cast scores **0**.

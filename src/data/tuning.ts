@@ -23,6 +23,7 @@ export const STAGE_CLEAR_GOLD = 10;
 export const UNUSED_CAST_GOLD = 5;       // extra gold for each cast left over when a stage is cleared
 export const SKIP_REWARD_GOLD = 10;      // gold for skipping the reward pick
 export const CARD_PRICE = 20;            // price of a modifier or item in the shop
+export const SELL_CARD_PRICE = 5;
 export const REMOVE_UNSTABLE_PRICE = 15;
 
 export const STARTING_UNLOCKED_SLOTS = 3;
