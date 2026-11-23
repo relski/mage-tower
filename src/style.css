@@ -1,0 +1,178 @@
+/* Minimal styles for the text prototype. Mobile-first. */
+
+:root {
+  --text: #1f2933;
+  --muted: #6b7280;
+  --bg: #ffffff;
+  --panel: #f3f4f6;
+  --border: #d1d5db;
+  --accent: #7c3aed;
+  --win: #15803d;
+  --lose: #b91c1c;
+
+  --mono: ui-monospace, "SF Mono", Consolas, monospace;
+
+  color-scheme: light dark;
+  font: 16px/1.45 var(--mono);
+  color: var(--text);
+  background: var(--bg);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --text: #e5e7eb;
+    --muted: #9ca3af;
+    --bg: #16171d;
+    --panel: #1f2028;
+    --border: #2e303a;
+    --accent: #c084fc;
+    --win: #4ade80;
+    --lose: #f87171;
+  }
+}
+
+body {
+  margin: 0;
+}
+
+#app {
+  max-width: 480px;
+  margin: 0 auto;
+  padding: 16px;
+  box-sizing: border-box;
+}
+
+h1 {
+  margin: 0;
+  font-size: 24px;
+}
+
+h2 {
+  margin: 0 0 4px;
+  font-size: 14px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+p {
+  margin: 0;
+}
+
+.muted {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.panel {
+  margin-top: 12px;
+  padding: 10px 12px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+pre {
+  margin: 0;
+  font: inherit;
+  white-space: pre-wrap;
+}
+
+.banner {
+  margin-top: 12px;
+  font-weight: bold;
+}
+
+.banner.win {
+  color: var(--win);
+}
+
+.banner.lose {
+  color: var(--lose);
+}
+
+.slots,
+.choices {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.slot,
+.choice {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  align-items: flex-start;
+  min-height: 0;
+  padding: 8px 10px;
+  text-align: left;
+  font-weight: normal;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+}
+
+.slot-name {
+  font-weight: bold;
+}
+
+.slot-text {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.slot.selected {
+  border-color: var(--accent);
+  outline: 2px solid var(--accent);
+}
+
+.slot:disabled {
+  opacity: 0.6;
+}
+
+.slot.locked {
+  opacity: 0.4;
+}
+
+button.small {
+  flex: none;
+  min-height: 36px;
+  margin-top: 8px;
+  padding: 0 14px;
+  font-size: 14px;
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+button {
+  flex: 1;
+  min-height: 48px;
+  font: inherit;
+  font-weight: bold;
+  color: var(--bg);
+  background: var(--accent);
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+button:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.log {
+  margin-top: 12px;
+  padding: 10px 12px;
+  height: 260px;
+  overflow-y: auto;
+  font-size: 14px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
