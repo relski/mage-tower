@@ -1,6 +1,6 @@
 # Mage Tower: Prototype Project Document
 
-Working title. Browser game, TypeScript, mobile-first. Draft v0.4, November 23, 2026.
+Working title. Browser game, TypeScript, mobile-first. Draft v0.9, November 27, 2026.
 
 Version history:
 
@@ -12,6 +12,16 @@ Version history:
   - The chosen element is immutable and outside the loadout. Runs start with one random item and modifier plus three empty slots, and any loadout card can be sold in a shop for 5 gold.
   - Drawn channel cards are shown as colored boxes, Unstable cards use a neutral color, and a failed cast stays visible with a red panel for one second before clearing. The enemy-HP meter starts full and drains as damage is dealt.
   - Element defaults and score tests were updated to current balance values (Fire +3 per burn stack, Lightning +17 damage, Earth +24 damage).
+- v0.5 follows a code review:
+  - When a cast leaves the draw pile empty and the stage goes on, the discard pile is shuffled back into the draw pile. Before, a small deck could leave the player unable to draw or release.
+  - The boss now pays stage-clear gold like every other stage (it still gives no reward pick).
+  - The game state remembers the channel of a backfired draw, so the UI shows the failed cast without recomputing the rules. The red panel stays for two seconds.
+  - After the boss, the shop shows a summary of the finished round instead of the defeated enemy.
+  - Adds saving: a run in progress is saved to localStorage after every action and resumed when the page loads. An "Abandon run" button starts a new run.
+- v0.6 fixes the portrait layout of the stage screen for Phase 4 (see Prototype scope): a one-row player panel, one tab section (combat log, enemy view, loadout) that returns to the enemy view after every action, the channel panel, and the Draw and Release buttons.
+- v0.7 adds the cast animation (see Prototype scope): releasing a cast plays its trace on the enemy view, then drains the enemy's HP.
+- v0.8 gives the pick, reward, shop and lost screens the same look and one-screen layout as the stage screen (see Prototype scope).
+- v0.9 is the styling pass: shared card styling, a Modifier or Item badge on loadout cards, hover and keyboard focus states, and the type scale and motion as design tokens.
 
 ## 1. Pitch
 
@@ -90,7 +100,7 @@ Details:
 - The draw pile **persists across casts within a stage**. Unstable cards drawn safely move to the discard pile, so later casts are safer. Remembering what is left matters.
 - An Unstable card counts as a drawn card for the multiplier. The first one is a free multiplier step with no power. The second is the danger.
 - A backfire costs only the cast. There is no other penalty for now.
-- If the draw pile runs out mid-stage, the player cannot draw and has to release.
+- If the draw pile runs out in the middle of a cast, the player cannot draw and has to release. When a cast ends with the draw pile empty and the stage still going, the discard pile (including the cards just released) is shuffled into a new draw pile, so a cast never starts with nothing to draw. Cards drawn safely, including Unstable ones, therefore come back after a full pass through the deck.
 
 Illustrative backfire odds for a fresh 20-card deck with 6 Unstable (calculated by hand, and they change as the deck changes):
 
@@ -178,9 +188,9 @@ When the boss stage starts, the seeded RNG chooses one rule from the boss rule p
 
 ### Rewards and shop
 
-**Gold.** Clearing a stage that is not the last pays 10 gold plus 5 for every cast left over.
+**Gold.** Clearing a stage pays 10 gold plus 5 for every cast left over, the boss included.
 
-**Reward pick.** After such a stage the player picks 1 of 3 options, or skips for 10 gold:
+**Reward pick.** After a stage that is not the boss, the player picks 1 of 3 options, or skips for 10 gold:
 
 - a random modifier and a random item (preferring cards not already in the loadout), or
 - one change to the channel deck: add a number card (6 to 9), remove the lowest number card, or remove an Unstable card.
@@ -223,6 +233,7 @@ These replace the v0.1 reference round, and they depend on Fire, Pierce and Crac
 - Gold, reward picks after normal stages, a shop after each reward and boss, and slot unlocks
 - Sell any modifier or item in an unlocked loadout slot for 5 gold in the shop
 - Reorder loadout cards by clicking two slots
+- Autosave of the run in progress to localStorage, resumed when the page loads; an Abandon run button to start over
 - Text UI first, then a real mobile UI with cast animation (number popups and a running total)
 
 **Out of scope for now**
@@ -232,6 +243,33 @@ These replace the v0.1 reference round, and they depend on Fire, Pierce and Crac
 - Suits, special effects, or upgrades on channel cards
 - Enemy element affinities
 - Save system beyond the current run
+
+**Stage screen layout (Phase 4)**
+
+The stage screen is built for a portrait phone and must fit on one screen without scrolling the page. From top to bottom:
+
+- **Player panel (one row):** the chosen element (icon and name) and gold (coin icon and number), with a menu button at the end for Abandon run.
+- **Tab section:** three tabs with icons over one content area that takes the remaining height:
+  - *Combat log:* the newest 30 lines of the log, newest at the bottom.
+  - *Enemy view:* the enemy image, its name, the round and stage, the HP meter with numbers, and the boss rule when there is one.
+  - *Loadout:* the unlocked slots in effect order, then the locked slots as one row. The element is not listed here, it is in the player panel. Tapping two slots swaps them. Every loadout card shows a small Modifier or Item badge (also on the reward and shop options).
+- **Channel panel:** the draw pile and discard pile counts (with the Unstable cards left in the pile) at the top, the casts left, the five card slots with the drawn cards, and the power and Unstable count.
+- **Draw and Release buttons** at the bottom.
+
+The Enemy tab is the default. After every action (a draw or a release) and when a stage starts, the view returns to the Enemy tab, so the enemy's HP is the first thing visible. Swapping loadout slots does not reset the tab, since a swap takes two taps there. The selected tab is not saved.
+
+**Cast animation**
+
+When a cast is released, the Enemy tab plays it. The enemy picture shows the running damage total as a big number that pops at each step of the cast (the channel's power, then every card that changed the total, with a line saying what changed it). Then the enemy shakes and its HP meter drains by the damage dealt. The whole animation takes about three seconds. The screen stays on the stage until it ends, even when the cast clears the stage or ends the run, so the player sees the hit land before the reward, shop or lost screen appears. Draw, Release and the loadout slots are off while it plays, and a tap anywhere skips it. A backfire has no animation (the red channel panel shows instead), and for players who prefer reduced motion the animation is off completely. The combat log always has every step as text.
+
+**Other screens**
+
+The pick, reward, shop and lost screens use the same one-screen layout, with no page scrolling, and the same cards and colors:
+
+- **Pick:** the four elements as colored cards, one under the other, each with its description.
+- **Reward:** the player panel (so gold is in view), the reward options, and the loadout. Skip for gold is pinned at the bottom. Once a card reward is chosen, only the loadout is left, with the held card shown above the slots, to place it.
+- **Shop:** the player panel and three tabs (Buy, Sell, Loadout), with Next stage (or Begin Round) pinned at the bottom. Buying a card opens the Loadout tab to place it, and the shop goes back to Buy afterwards.
+- **Lost:** the stage screen with a panel saying where the run ended, and New game in place of Draw and Release.
 
 ## 5. Technical approach
 
@@ -262,7 +300,7 @@ These replace the v0.1 reference round, and they depend on Fire, Pierce and Crac
 2. **Stage loop:** HP, cast limits, win and lose states, as a text UI. *Done.*
 3. **Elements and stages:** Fire, Ice, Lightning and Earth, the three-stage round, and a boss rule. *Done.*
 4. **Run flow:** rewards, deck changes, shop, and slot unlocks. *Done.*
-5. **Real UI:** mobile layout, cast animation, and reordering.
+5. **Real UI:** mobile layout (the stage screen layout is fixed in Prototype scope), cast animation, and reordering.
 6. **Playtest and tune:** Unstable count, multiplier steps, HP, prices, and pacing.
 
 ## 8. Risks
@@ -291,11 +329,15 @@ These replace the v0.1 reference round, and they depend on Fire, Pierce and Crac
 - **Reordering:** modifier and item slots can be swapped on the stage, reward and shop screens, but only while the channel is empty. The chosen element remains fixed outside the loadout.
 - **Boss rule:** the Tower Warden receives one seeded rule when each round's stage starts: a ×2 multiplier cap, an earlier Unstable backfire, or half value for number cards above 5. The pool and balance should be revisited after playtesting.
 - **Round progression:** defeating the boss opens a shop; leaving it starts another round. Each stage rolls its base HP and per-round growth from configured ranges, using the seeded RNG.
+- **Draw pile reshuffle:** when a cast leaves the draw pile empty and the stage goes on, the discard pile is shuffled into it (seeded). Chosen over failing the stage or blocking the player, since small decks are a normal result of removing cards.
+- **Boss gold:** the boss pays the same gold as other stages, so gold earned in the boss fight can be spent in the shop that follows.
+- **Saving:** the whole game state is saved to localStorage after every action while a run is in progress, and the run is deleted when it is lost or abandoned. Cards are saved by id, and the saved seed and piles keep draws identical after a reload, so reloading cannot be used to reroll a draw. Only the current run is saved; meta-progression stays out of scope.
+- **Stage screen layout:** one portrait screen with a one-row player panel (element, gold), a tab section (combat log, enemy view, loadout), the channel panel (pile, discard, casts) and the Draw and Release buttons. The loadout is behind a tab, not always on screen, because five slots with descriptions were what made the screen too long for a phone. The Enemy tab is the default and the view returns to it after every draw or release.
 
 ## 10. Open questions
 
-- When the draw pile runs out mid-stage, should the discard pile reshuffle into it? (Today the player simply cannot draw.)
 - How do rounds map to tower floors, if at all?
 - How strict should the cast limit be (4 casts, or more with scaling)?
 - Should Earth have a different identity, or the boss a different rule, so Earth is not so weak against the boss?
 - Is the run economy right (gold per stage, prices, number of purchases)?
+- Does the combat log tab need an unread indicator while the Enemy tab is showing?

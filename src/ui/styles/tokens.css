@@ -1,0 +1,105 @@
+/* Design tokens: colors, type, spacing, shape and motion. Styles use these instead of raw values. */
+
+:root {
+  /* colors */
+  --text: #1f2933;
+  --muted: #6b7280;
+  --bg: #ffffff;
+  --panel: #f3f4f6;
+  --border: #d1d5db;
+  --accent: #7c3aed;
+  --win: #15803d;
+  --lose: #b91c1c;
+  --channel-value-bg: #dbeafe;
+  --channel-value-border: #3b82f6;
+  --channel-value-text: #1e3a8a;
+  --channel-unstable-bg: linear-gradient(135deg, #d4d4d8, #fafafa 48%, #a1a1aa);
+  --channel-unstable-border: #a1a1aa;
+  --channel-unstable-text: #3f3f46;
+  --backfire-border: #dc2626;
+
+  /* a warning, for example the boss rule badge */
+  --warn-bg: #fef3c7;
+  --warn-text: #92400e;
+  --warn-border: #f59e0b;
+
+  /* one color per element, matching the card ids in data/cards/elements.ts */
+  --element-fire: #ea580c;
+  --element-ice: #0891b2;
+  --element-lightning: #ca8a04;
+  --element-earth: #8b5e34;
+
+  /* one color per kind of loadout card, for its badge */
+  --type-modifier: #0f766e;
+  --type-item: #be185d;
+
+  /* type scale (the page text is 16px) */
+  --font-xs: 11px;
+  --font-sm: 13px;
+  --font-md: 14px;
+  --font-lg: 18px;
+  --font-xl: 22px;
+  --font-title: 24px;
+  --font-display: 40px;
+
+  /* spacing scale */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+
+  /* shape and size */
+  --radius: 6px;
+  --radius-pill: 999px;
+  --tap-min: 44px; /* smallest comfortable touch target */
+  --shadow-raised: 0 4px 12px rgb(0 0 0 / 0.25); /* for things that float, like the menu */
+
+  /* a card button's tint when the pointer is over it, and its keyboard focus ring */
+  --hover-tint: color-mix(in srgb, var(--accent) 7%, var(--bg));
+  --focus-ring: 2px solid var(--accent);
+
+  /* motion */
+  --ease-quick: 120ms ease-out;
+
+  /* the screen edges a notch or a home bar can cover (0 on most screens) */
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+
+  --mono: ui-monospace, "SF Mono", Consolas, monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --text: #e5e7eb;
+    --muted: #9ca3af;
+    --bg: #16171d;
+    --panel: #1f2028;
+    --border: #2e303a;
+    --accent: #c084fc;
+    --win: #4ade80;
+    --lose: #f87171;
+    --channel-value-bg: #172554;
+    --channel-value-border: #60a5fa;
+    --channel-value-text: #bfdbfe;
+    --channel-unstable-bg: linear-gradient(135deg, #52525b, #a1a1aa 48%, #3f3f46);
+    --channel-unstable-border: #a1a1aa;
+    --channel-unstable-text: #18181b;
+    --backfire-border: #ef4444;
+
+    --warn-bg: #3b2a0a;
+    --warn-text: #fcd34d;
+    --warn-border: #f59e0b;
+
+    --element-fire: #fb923c;
+    --element-ice: #22d3ee;
+    --element-lightning: #facc15;
+    --element-earth: #c08a5a;
+
+    --type-modifier: #2dd4bf;
+    --type-item: #f472b6;
+
+    --shadow-raised: 0 4px 12px rgb(0 0 0 / 0.5);
+  }
+}

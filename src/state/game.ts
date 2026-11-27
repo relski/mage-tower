@@ -42,6 +42,7 @@ import {
   SKIP_REWARD_GOLD,
   STARTING_UNLOCKED_SLOTS,
 } from "../data/tuning";
+import { loadSavedGame, persistGame } from "./save-storage";
 
 // "pick": choosing the starting element, "stage": playing a stage,
 // "reward": picking a reward after a stage, "shop": spending gold before the next stage,
@@ -72,7 +73,23 @@ export type Game = {
   shopOffers: ShopOffer[];
   pendingCard: PendingCard | null;
   selectedSlot: number | null;   // first slot chosen for a swap
+  lastBackfire: ChannelCard[] | null; // the channel of the latest draw if it backfired (the UI shows it briefly)
+  lastCast: CastReport | null;   // the latest release, for the UI to replay (never saved)
   log: string[];
+};
+
+// What the UI needs to replay a cast: the trace and score, and the game as it was just before the
+// channel was released (so the screen can keep showing the stage while the cast plays, even when
+// the cast clears or fails it). Never saved.
+export type CastReport = {
+  before: Game;                  // the game just before the release; its own lastCast is null
+  castNumber: number;
+  trace: TraceStep[];
+  score: number;
+  backfired: boolean;
+  targetHp: number;
+  damageBefore: number;          // the stage's total damage before this cast
+  damageAfter: number;           // and after it
 };
 
 // pure functions: each takes a game and returns the next one
@@ -94,6 +111,8 @@ export function createGame(seed: number): Game {
     shopOffers: [],
     pendingCard: null,
     selectedSlot: null,
+    lastBackfire: null,
+    lastCast: null,
     log: ["Choose your element."],
   };
 }
@@ -194,6 +213,7 @@ export function applyPick(game: Game, elementId: string): Game {
     loadout: start.loadout,
     stage: firstStage.stage,
     selectedSlot: null,
+    lastCast: null,
     log: [
       ...game.log,
       `You chose ${element.name}.`,
@@ -227,6 +247,13 @@ function enterShop(game: Game): Game {
 }
 
 export function applyRelease(game: Game): Game {
+  const next = releaseStage(game);
+
+  return next === game ? game : { ...next, lastBackfire: null };
+}
+
+// releases the channel (a manual release, or the automatic one at the end of a draw)
+function releaseStage(game: Game): Game {
   if (game.phase !== "stage" || game.stage === null || !canRelease(game.stage)) {
     return game;
   }
@@ -235,6 +262,19 @@ export function applyRelease(game: Game): Game {
   const result = releaseCast(game.stage, game.loadout, game.element);
   const stage = result.nextState;
   const lastStage = game.stageIndex === ROUND_STAGES.length - 1;
+
+  // the UI replays the cast from this; the copy of the game must not hold the previous report,
+  // or every cast would keep the one before it alive
+  const report: CastReport = {
+    before: { ...game, lastCast: null },
+    castNumber,
+    trace: result.trace,
+    score: result.score,
+    backfired: result.backfired,
+    targetHp: stage.targetHp,
+    damageBefore: game.stage.totalDamage,
+    damageAfter: stage.totalDamage,
+  };
 
   const lines = [
     `Cast ${castNumber}`,
@@ -245,7 +285,7 @@ export function applyRelease(game: Game): Game {
     `Damage: ${stage.totalDamage} / ${stage.targetHp}`,
   ];
 
-  const next: Game = { ...game, stage, selectedSlot: null };
+  const next: Game = { ...game, stage, selectedSlot: null, lastCast: report };
 
   if (stage.status === "failed") {
     lines.push("Out of casts. The run is over.");
@@ -253,22 +293,25 @@ export function applyRelease(game: Game): Game {
   }
 
   if (stage.status === "cleared") {
+    // every cleared stage pays gold, the boss included
+    const earned = stageClearGold(stage.castsRemaining);
+
     if (lastStage) {
       const roundNumber = game.roundNumber + 1;
       lines.push(
-        `${stage.name} is down. Round ${game.roundNumber} cleared.`,
-        `Visit the shop before Round ${roundNumber}.`,
+        `${stage.name} is down. You earn ${earned} gold.`,
+        `Round ${game.roundNumber} cleared. Visit the shop before Round ${roundNumber}.`,
       );
 
       return enterShop({
         ...next,
+        gold: game.gold + earned,
         seed: stage.seed,
         log: [...game.log, ...lines],
       });
     }
 
-    // a cleared stage pays gold and offers a reward pick; the rng continues from the stage
-    const earned = stageClearGold(stage.castsRemaining);
+    // a cleared stage offers a reward pick; the rng continues from the stage
     const rewards = createRewardOptions(game.loadout, game.deck, MODIFIERS, ITEMS, stage.seed);
 
     lines.push(`${stage.name} is down. You earn ${earned} gold.`, "Choose a reward.");
@@ -310,13 +353,15 @@ export function applyDraw(game: Game): Game {
     ...game,
     stage: result.nextState,
     selectedSlot: null,
+    lastBackfire: result.backfired ? result.nextState.channel : null,
+    lastCast: null,
     log: [...game.log, ...lines],
   };
 
-  return next.stage !== null && shouldAutoRelease(next.stage, rules) ? applyRelease(next) : next;
+  return next.stage !== null && shouldAutoRelease(next.stage, rules) ? releaseStage(next) : next;
 }
 
-// reward pick: a card goes to a slot (the player chooses which), a deck change happens at once
+// reward pick: a card fills the first empty unlocked slot, or waits for slot selection if none is empty
 export function applyChooseReward(game: Game, index: number): Game {
   if (game.phase !== "reward" || game.pendingCard !== null) {
     return game;
@@ -329,12 +374,21 @@ export function applyChooseReward(game: Game, index: number): Game {
   }
 
   if (option.kind === "card") {
-    return {
+    const pendingGame: Game = {
       ...game,
       pendingCard: { card: option.card, cost: 0, source: "reward", offerIndex: index },
       selectedSlot: null,
-      log: [...game.log, `Choose a slot for ${option.card.name}.`],
     };
+    const emptySlot = game.loadout.findIndex(
+      (card, slot) => slot < game.unlockedSlots && card === null,
+    );
+
+    return emptySlot === -1
+      ? {
+          ...pendingGame,
+          log: [...game.log, `Choose a slot for ${option.card.name}.`],
+        }
+      : applyPlaceCard(pendingGame, emptySlot);
   }
 
   const deck = applyDeckReward(game.deck, option);
@@ -496,6 +550,7 @@ export function applyNextStage(game: Game): Game {
     stage: nextStage.stage,
     shopOffers: [],
     selectedSlot: null,
+    lastCast: null,
     log: [...game.log, ...stageIntro(nextStage.config, stageIndex, roundNumber)],
   };
 }
@@ -543,9 +598,29 @@ export function applySelectSlot(game: Game, index: number): Game {
 let current: Game = createGame(Date.now());
 const listeners = new Set<() => void>();
 
+function notify(): void {
+  listeners.forEach((listener) => listener());
+}
+
+// every change of the game is saved, so a run in progress survives a page reload
 function update(next: Game): void {
   current = next;
-  listeners.forEach((listener) => listener());
+  persistGame(next);
+  notify();
+}
+
+// loads the saved run, if there is a valid one. Call it once, before the UI is mounted.
+export function resumeSavedGame(): boolean {
+  const saved = loadSavedGame();
+
+  if (saved === null) {
+    return false;
+  }
+
+  current = { ...saved, log: [...saved.log, "Run resumed from your saved game."] };
+  notify();
+
+  return true;
 }
 
 export function getGame(): Game {

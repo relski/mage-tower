@@ -95,7 +95,8 @@ export function drawIntoChannel(
 }
 
 // releases the channel: scores the cast, then does the stage bookkeeping.
-// This is the only place that changes castNumber and castsRemaining.
+// This is the only place that changes castNumber and castsRemaining, and the only place
+// that reshuffles the discard pile into the draw pile.
 export function releaseCast(
   state: StageState,
   loadout: Loadout,
@@ -122,6 +123,20 @@ export function releaseCast(
     status = "failed";
   }
 
+  let drawPile = state.drawPile;
+  let discardPile = [...state.discardPile, ...state.channel];
+  let seed = result.nextState.seed;
+
+  // a stage that goes on never starts a cast with nothing to draw: when the draw pile is
+  // empty, the discard pile (including the cards just released) is shuffled back into it
+  if (status === "ready" && drawPile.length === 0 && discardPile.length > 0) {
+    const reshuffled = shuffle(discardPile, seed);
+
+    drawPile = reshuffled.cards;
+    discardPile = [];
+    seed = reshuffled.seed;
+  }
+
   return {
     ...result,
     nextState: {
@@ -129,9 +144,11 @@ export function releaseCast(
       totalDamage,
       castsRemaining,
       castNumber: state.castNumber + 1,
-      discardPile: [...state.discardPile, ...state.channel],
+      drawPile,
+      discardPile,
       channel: [],
       status,
+      seed,
     },
   };
 }

@@ -1,0 +1,599 @@
+/* Styles for the Phase 4 components: icons, the player panel and its menu, the tab section,
+   the enemy tab, the element cards of the pick screen and card badges of the loadout, the channel panel, the action
+   bar, the pick, reward and shop screens, and the cast animation. Everything here uses the
+   tokens from tokens.css. */
+
+.icon {
+  width: 1.25em;
+  height: 1.25em;
+  flex: none;
+}
+
+/* text for screen readers only (for example the word "Gold" next to a coin icon) */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* player panel: element, gold, and the menu button on the right */
+.player-panel {
+  position: relative; /* the menu opens below it */
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+}
+
+.element-chip {
+  --chip: var(--text);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-3);
+  font-weight: bold;
+  color: var(--chip);
+  background: color-mix(in srgb, var(--chip) 14%, transparent);
+  border: 1px solid var(--chip);
+  border-radius: var(--radius-pill);
+}
+
+/* the element's color, for its chip in the player panel and its card on the pick screen */
+.element-chip[data-element="fire"],
+.element-row[data-element="fire"] {
+  --chip: var(--element-fire);
+}
+
+.element-chip[data-element="ice"],
+.element-row[data-element="ice"] {
+  --chip: var(--element-ice);
+}
+
+.element-chip[data-element="lightning"],
+.element-row[data-element="lightning"] {
+  --chip: var(--element-lightning);
+}
+
+.element-chip[data-element="earth"],
+.element-row[data-element="earth"] {
+  --chip: var(--element-earth);
+}
+
+/* An element on the pick screen: it looks like a card button (see style.css) in the element's
+   color. */
+.element-row {
+  --chip: var(--text);
+  background: color-mix(in srgb, var(--chip) 12%, var(--bg));
+  border-color: var(--chip);
+}
+
+.element-row .slot-name {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--chip);
+}
+
+@media (hover: hover) {
+  .element-row:hover {
+    background: color-mix(in srgb, var(--chip) 22%, var(--bg));
+  }
+}
+
+/* a small label on a card: modifier or item */
+.type-badge {
+  --badge: var(--muted);
+  display: inline-block;
+  padding: 0 var(--space-2);
+  font-size: var(--font-xs);
+  font-weight: bold;
+  line-height: 1.5;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--badge);
+  border: 1px solid var(--badge);
+  border-radius: var(--radius-pill);
+}
+
+.type-badge[data-type="modifier"] {
+  --badge: var(--type-modifier);
+}
+
+.type-badge[data-type="item"] {
+  --badge: var(--type-item);
+}
+
+/* beside a card's name */
+.slot-name .type-badge {
+  margin-left: var(--space-2);
+  vertical-align: middle;
+}
+
+.gold {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-weight: bold;
+}
+
+/* a square button with only an icon in it */
+.icon-button {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: var(--tap-min);
+  height: var(--tap-min);
+  min-height: var(--tap-min);
+  margin-left: auto;
+  padding: 0;
+  color: var(--text);
+  background: transparent;
+  border: 1px solid var(--border);
+}
+
+@media (hover: hover) {
+  .icon-button:hover {
+    background: var(--hover-tint);
+    border-color: var(--accent);
+  }
+}
+
+.game-menu {
+  position: absolute;
+  top: calc(100% + var(--space-1));
+  right: 0;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 200px;
+  padding: var(--space-3);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-raised);
+}
+
+.game-menu button.small {
+  margin-top: 0;
+}
+
+/* the tab section: a row of icon tabs above the content of the selected tab */
+.tab-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-height: 0;
+}
+
+.tabs {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.tab {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: var(--tap-min);
+  font-size: var(--font-xl);
+  color: var(--muted);
+  background: var(--panel);
+  border: 1px solid var(--border);
+}
+
+/* the shop's tabs have a word next to the icon */
+.tab span {
+  font-size: var(--font-md);
+  font-weight: bold;
+}
+
+.tab[aria-selected="true"] {
+  color: var(--text);
+  background: var(--bg);
+  border-color: var(--accent);
+  box-shadow: inset 0 -3px 0 var(--accent);
+}
+
+@media (hover: hover) {
+  .tab[aria-selected="false"]:hover {
+    color: var(--text);
+    border-color: var(--accent);
+  }
+}
+
+/* the only part of the stage screen that scrolls */
+.tab-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* the combat log fills the tab and scrolls inside itself */
+.tab-body .log {
+  flex: 1;
+  min-height: 0;
+  height: auto;
+}
+
+/* the enemy tab: picture, name with round and stage, HP meter, boss rule */
+.enemy-view {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+/* The picture takes the spare height (up to a limit) and shrinks first on a short screen.
+   The drawing is placed over the whole box so it always has a definite size, and keeps its
+   4:3 shape inside it. */
+.enemy-image {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 64px;
+  max-height: 240px;
+  color: var(--muted);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.enemy-image svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.enemy-title {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.enemy-name {
+  font-size: var(--font-lg);
+  font-weight: bold;
+}
+
+.rule-badge {
+  align-self: flex-start;
+  padding: var(--space-1) var(--space-3);
+  font-size: var(--font-sm);
+  color: var(--warn-text);
+  background: var(--warn-bg);
+  border: 1px solid var(--warn-border);
+  border-radius: var(--radius-pill);
+}
+
+/* the channel panel: counts on top, the fixed card slots, then the power line */
+.channel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  font-size: var(--font-sm);
+}
+
+.channel-head .icon {
+  vertical-align: text-bottom;
+}
+
+.channel-slots {
+  display: grid;
+  grid-template-columns: repeat(var(--slots, 5), minmax(0, 1fr));
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.channel-slot {
+  display: grid;
+  place-items: center;
+  height: 64px;
+  font-size: var(--font-xl);
+  font-weight: bold;
+  border: 1px solid;
+  border-radius: var(--radius);
+}
+
+.channel-slot.empty {
+  border-style: dashed;
+  border-color: var(--border);
+}
+
+.channel-slot.number {
+  color: var(--channel-value-text);
+  background: var(--channel-value-bg);
+  border-color: var(--channel-value-border);
+}
+
+.channel-slot.unstable {
+  color: var(--channel-unstable-text);
+  background: var(--channel-unstable-bg);
+  border-color: var(--channel-unstable-border);
+}
+
+/* the action bar: Draw and Release at equal width, bigger than other buttons for a thumb */
+.stage-actions .actions button,
+.screen-actions .actions button {
+  flex: 1 1 0;
+  min-height: 52px;
+  font-size: var(--font-lg);
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.round-progress {
+  display: flex;
+  margin: 0 0 var(--space-2);
+  padding: 0;
+  list-style: none;
+}
+
+.round-progress-step {
+  position: relative;
+  z-index: 0;
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+  color: var(--muted);
+  font-size: var(--font-xs);
+}
+
+.round-progress-step:not(:last-child)::after {
+  position: absolute;
+  top: 6px;
+  left: 50%;
+  z-index: -1;
+  width: 100%;
+  height: 2px;
+  background: var(--border);
+  content: "";
+}
+
+.round-progress-step.is-complete {
+  color: var(--win);
+}
+
+.round-progress-step.is-complete::after {
+  background: var(--win);
+}
+
+.round-progress-step.is-next {
+  color: var(--accent);
+  font-weight: bold;
+}
+
+.round-progress-dot {
+  width: 14px;
+  height: 14px;
+  box-sizing: border-box;
+  border: 2px solid var(--border);
+  border-radius: 50%;
+  background: var(--bg);
+}
+
+.round-progress-step.is-complete .round-progress-dot {
+  border-color: var(--win);
+  background: var(--win);
+}
+
+.round-progress-step.is-next .round-progress-dot {
+  border-color: var(--accent);
+  background: var(--accent);
+}
+
+.action-primary {
+  color: var(--bg);
+  background: var(--accent);
+  border: 2px solid var(--accent);
+}
+
+.action-secondary {
+  color: var(--accent);
+  background: transparent;
+  border: 2px solid var(--accent);
+}
+
+@media (hover: hover) {
+  .action-primary:not(:disabled):hover {
+    filter: brightness(1.1);
+  }
+
+  .action-secondary:not(:disabled):hover {
+    background: color-mix(in srgb, var(--accent) 12%, transparent);
+  }
+}
+
+/* off: grey with a dashed border, so it does not look like a faded active button */
+.stage-actions .actions button:disabled,
+.screen-actions .actions button:disabled {
+  color: var(--muted);
+  background: var(--panel);
+  border: 2px dashed var(--border);
+  opacity: 1;
+}
+
+.stage-actions .actions button:active:not(:disabled),
+.screen-actions .actions button:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+/* the pick, reward and shop screens */
+.title-block {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+/* the card being placed in the loadout (a reward or a purchase) */
+.pending-card {
+  display: flex;
+  flex-direction: column;
+  margin-top: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  background: color-mix(in srgb, var(--accent) 14%, var(--bg));
+  border: 2px solid var(--accent);
+  border-radius: var(--radius);
+}
+
+/* the confirmation popup over the screen (the reward screen asks before a card is taken) */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 20; /* above the player panel's menu */
+  display: grid;
+  place-items: center;
+  padding: calc(var(--space-4) + var(--safe-top)) calc(var(--space-4) + var(--safe-right))
+    calc(var(--space-4) + var(--safe-bottom)) calc(var(--space-4) + var(--safe-left));
+  background: rgb(0 0 0 / 0.55);
+}
+
+.modal {
+  width: min(100%, 360px);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-raised);
+}
+
+.modal h2 {
+  margin: 0;
+  font-size: var(--font-lg);
+}
+
+.modal .pending-card {
+  margin-top: 0;
+}
+
+.modal-actions {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.modal-actions button {
+  flex: 1 1 0;
+  min-height: 52px;
+  font-size: var(--font-lg);
+}
+
+/* the stage screen after the run is lost */
+.lost-panel {
+  border-color: var(--lose);
+}
+
+.lost-panel h2 {
+  color: var(--lose);
+}
+
+/* The cast animation, drawn over the enemy picture: the running damage total as a big number,
+   what changed it, and a hint that a tap skips. Each step renders it again, which restarts the
+   pop. When the enemy is hit, the picture shakes. */
+.cast-readout {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: grid;
+  place-content: center;
+  gap: var(--space-1);
+  padding: var(--space-2);
+  overflow: hidden;
+  text-align: center;
+  background: color-mix(in srgb, var(--bg) 80%, transparent);
+  border-radius: inherit;
+}
+
+.cast-total {
+  font-size: var(--font-display);
+  font-weight: bold;
+  line-height: 1;
+  color: var(--accent);
+  animation: cast-pop 260ms ease-out;
+}
+
+.cast-step {
+  max-width: 100%;
+  overflow: hidden;
+  font-size: var(--font-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+}
+
+.cast-skip {
+  font-size: var(--font-xs);
+  color: var(--muted);
+}
+
+.enemy-image.hit svg {
+  animation: enemy-shake 300ms linear;
+}
+
+@keyframes cast-pop {
+  from {
+    opacity: 0.2;
+    transform: scale(0.6);
+  }
+
+  60% {
+    transform: scale(1.15);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes enemy-shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+
+  20% {
+    transform: translateX(-6px);
+  }
+
+  40% {
+    transform: translateX(6px);
+  }
+
+  60% {
+    transform: translateX(-4px);
+  }
+
+  80% {
+    transform: translateX(3px);
+  }
+}
+
+/* no movement for people who ask for less (the app skips the animation itself in that case) */
+@media (prefers-reduced-motion: reduce) {
+  .cast-total,
+  .enemy-image.hit svg {
+    animation: none;
+  }
+
+  .stage-actions .actions button:active:not(:disabled),
+  .screen-actions .actions button:active:not(:disabled) {
+    transform: none;
+  }
+}

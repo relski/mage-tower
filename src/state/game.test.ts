@@ -156,6 +156,22 @@ describe("applyDraw and applyRelease", () => {
     expect(game.log.some((line) => line.includes("Backfire"))).toBe(true);
   });
 
+  it("remembers the backfired channel so the UI can show it, until the next release", () => {
+    let game = stageGame(makeState({ drawPile: [unstable, unstable, num(5), num(3)] }));
+
+    game = applyDraw(game);
+    expect(game.lastBackfire).toBe(null);
+
+    game = applyDraw(game);
+    expect(game.lastBackfire).toEqual([unstable, unstable]);
+
+    game = applyDraw(game);
+    expect(game.lastBackfire).toBe(null);
+
+    game = applyRelease({ ...game, lastBackfire: [unstable, unstable] });
+    expect(game.lastBackfire).toBe(null);
+  });
+
   it("does not backfire on the second Unstable card when Earth is equipped", () => {
     const earthy: Loadout = [crackedStaff, pierce, null, null, null];
     let game = stageGame(makeState({ drawPile: [unstable, unstable, num(5)] }), earthy, 0, earth);
@@ -199,6 +215,8 @@ describe("clearing and failing stages", () => {
     expect(shop.phase).toBe("shop");
     expect(shop.roundNumber).toBe(1);
     expect(shop.stageIndex).toBe(last);
+    expect(shop.gold).toBe(stageClearGold(3));
+    expect(shop.log.some((line) => line.includes("You earn"))).toBe(true);
     expect(shop.shopOffers.length).toBeGreaterThan(0);
     expect(shop.log.some((line) => line.includes("Visit the shop before Round 2"))).toBe(true);
 
@@ -228,8 +246,21 @@ describe("clearing and failing stages", () => {
 });
 
 describe("the reward screen", () => {
-  it("choosing a card holds it until a slot is chosen, then the shop opens", () => {
-    const holding = applyChooseReward(rewardGame(), 0);
+  it("choosing a card fills the first empty unlocked slot and opens the shop", () => {
+    const placed = applyChooseReward(rewardGame(), 0);
+
+    expect(placed.loadout[2]).toBe(hex);
+    expect(placed.pendingCard).toBe(null);
+    expect(placed.phase).toBe("shop");
+    expect(placed.shopOffers.length).toBeGreaterThan(0);
+    expect(placed.log.some((line) => line.includes("Placed Hex in slot 3"))).toBe(true);
+  });
+
+  it("holds a card for slot selection when no unlocked slot is empty", () => {
+    const fullLoadout = rewardGame({
+      loadout: [crackedStaff, pierce, crackedStaff, null, null],
+    });
+    const holding = applyChooseReward(fullLoadout, 0);
 
     expect(holding.pendingCard?.card).toBe(hex);
     expect(holding.phase).toBe("reward");
@@ -259,7 +290,10 @@ describe("the reward screen", () => {
   });
 
   it("a held card can be cancelled and another reward chosen", () => {
-    const holding = applyChooseReward(rewardGame(), 0);
+    const holding = applyChooseReward(
+      rewardGame({ loadout: [crackedStaff, pierce, crackedStaff, null, null] }),
+      0,
+    );
     const cancelled = applyCancelPending(holding);
 
     expect(cancelled.pendingCard).toBe(null);
@@ -268,7 +302,10 @@ describe("the reward screen", () => {
   });
 
   it("does not take another reward while holding a card, or for a missing option", () => {
-    const holding = applyChooseReward(rewardGame(), 0);
+    const holding = applyChooseReward(
+      rewardGame({ loadout: [crackedStaff, pierce, crackedStaff, null, null] }),
+      0,
+    );
 
     expect(applyChooseReward(holding, 1)).toBe(holding);
     expect(applySkipReward(holding)).toBe(holding);
@@ -276,7 +313,10 @@ describe("the reward screen", () => {
   });
 
   it("cannot place a card into a locked slot", () => {
-    const holding = applyChooseReward(rewardGame(), 0);
+    const holding = applyChooseReward(
+      rewardGame({ loadout: [crackedStaff, pierce, crackedStaff, null, null] }),
+      0,
+    );
 
     expect(applySelectSlot(holding, 3)).toBe(holding);
     expect(applySelectSlot(holding, 4)).toBe(holding);
@@ -496,5 +536,88 @@ describe("a whole run", () => {
     }
 
     expect(game.phase).toBe("lost");
+  });
+});
+
+describe("the cast report for the UI replay", () => {
+  // power 8 × 2 = 16, Staff +20, Fire +20, Pierce ×1.5 = 84
+  const threeCards = [num(5), unstable, num(3)];
+
+  it("a release records the trace, score, damage and the game just before it", () => {
+    const game = stageGame(makeState({ channel: threeCards, totalDamage: 10 }));
+    const released = applyRelease(game);
+    const report = released.lastCast;
+
+    expect(report).not.toBe(null);
+    expect(report?.castNumber).toBe(1);
+    expect(report?.score).toBe(84);
+    expect(report?.backfired).toBe(false);
+    expect(report?.trace.at(-1)?.total).toBe(84);
+    expect(report?.damageBefore).toBe(10);
+    expect(report?.damageAfter).toBe(94);
+    expect(report?.targetHp).toBe(released.stage?.targetHp);
+
+    // the copy of the game still has the full channel, and no report of its own
+    expect(report?.before.stage?.channel).toEqual(threeCards);
+    expect(report?.before.stage?.totalDamage).toBe(10);
+    expect(report?.before.lastCast).toBe(null);
+  });
+
+  it("keeps the game before the cast even when the cast clears the stage", () => {
+    const game = { ...stageGame(makeState({ channel: threeCards, targetHp: 50 })), gold: 3 };
+    const released = applyRelease(game);
+
+    expect(released.phase).toBe("reward");
+    expect(released.gold).toBeGreaterThan(3);
+    expect(released.lastCast?.before.phase).toBe("stage");
+    expect(released.lastCast?.before.gold).toBe(3);
+    expect(released.lastCast?.before.stage?.status).not.toBe("cleared");
+  });
+
+  it("an automatic release at 5 cards records the full channel", () => {
+    let game = stageGame(makeState({ drawPile: [num(1), num(2), num(3), num(4), num(5)] }));
+
+    for (let i = 0; i < 5; i++) {
+      game = applyDraw(game);
+    }
+
+    expect(game.lastCast?.before.stage?.channel).toHaveLength(5);
+    expect(game.stage?.channel).toEqual([]);
+  });
+
+  it("a backfire is reported as one, with no damage", () => {
+    const game = stageGame(makeState({ drawPile: [unstable, unstable, num(5)] }));
+    const afterBackfire = applyDraw(applyDraw(game));
+
+    expect(afterBackfire.lastCast?.backfired).toBe(true);
+    expect(afterBackfire.lastCast?.score).toBe(0);
+    expect(afterBackfire.lastCast?.damageAfter).toBe(afterBackfire.lastCast?.damageBefore);
+  });
+
+  it("a draw that does not release has no report", () => {
+    const released = applyRelease(stageGame(makeState({ channel: threeCards, drawPile: [num(1)] })));
+
+    expect(released.lastCast).not.toBe(null);
+    expect(applyDraw(released).lastCast).toBe(null);
+  });
+
+  it("does not chain reports: each one's game copy has none", () => {
+    let game = stageGame(makeState({ channel: threeCards, drawPile: [num(1), num(2), num(3)] }));
+
+    game = applyRelease(game);
+    game = applyDraw(applyDraw(applyDraw(game)));
+    game = applyRelease(game);
+
+    expect(game.lastCast?.castNumber).toBe(2);
+    expect(game.lastCast?.before.lastCast).toBe(null);
+  });
+
+  it("a new game, a pick and the next stage start with no report", () => {
+    expect(createGame(1).lastCast).toBe(null);
+    expect(applyPick(createGame(1), "fire").lastCast).toBe(null);
+
+    const shop = shopGame({ lastCast: applyRelease(stageGame(makeState({ channel: threeCards }))).lastCast });
+
+    expect(applyNextStage(shop).lastCast).toBe(null);
   });
 });

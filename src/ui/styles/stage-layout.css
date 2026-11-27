@@ -1,0 +1,81 @@
+/* Every screen fits the screen, so the page itself never scrolls.
+   app.ts puts the fit-screen class on #app. Each screen is a grid: a fixed top, a middle that
+   scrolls inside itself, and the buttons pinned at the bottom. On the stage screen the middle
+   is the selected tab's content (.tab-body) and the channel sits under it; on the pick, reward
+   and shop screens it is .screen-body. */
+
+#app.fit-screen {
+  height: 100vh; /* fallback for browsers without dynamic viewport units */
+  height: 100dvh; /* the visible height, even while a phone's address bar shows */
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+#app.fit-screen > .game {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+/* the top of a screen is its player panel (with the menu), and on some screens more under it */
+.stage-top,
+.screen-top {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.stage-screen {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto auto;
+  gap: var(--space-2);
+}
+
+/* the pick, reward and shop screens: top, scrolling body, and optional pinned buttons */
+.screen {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: var(--space-2);
+}
+
+.stage-screen > *,
+.screen > * {
+  min-width: 0;
+}
+
+/* the grid gap spaces the regions, so panels do not add their own top margin here */
+.stage-screen .panel,
+.stage-screen .actions,
+.stage-screen .log,
+.screen .panel,
+.screen .actions {
+  margin-top: 0;
+}
+
+.stage-channel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+/* the part of a pick, reward or shop screen that scrolls */
+.screen-body {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* the stage's loadout list has the same look when it appears in a scrolling body */
+.screen-body > .panel {
+  flex: none;
+}

@@ -169,7 +169,7 @@ describe("releaseCast", () => {
   });
 
   it("uses up the cast on a backfire", () => {
-    const state = makeState({ channel: [unstable, unstable] });
+    const state = makeState({ channel: [unstable, unstable], drawPile: [num(1)] });
     const result = release(state);
 
     expect(result.backfired).toBe(true);
@@ -200,7 +200,7 @@ describe("releaseCast", () => {
 describe("a stage over several casts", () => {
   it("keeps the draw pile across casts and sends drawn cards to the discard pile", () => {
     let stage = makeState({
-      drawPile: [num(5), unstable, num(3), num(4), num(4)],
+      drawPile: [num(5), unstable, num(3), num(4), num(4), num(2)],
     });
 
     // cast 1: draw 5, Unstable, 3, then release
@@ -209,7 +209,7 @@ describe("a stage over several casts", () => {
     }
     stage = release(stage).nextState;
 
-    expect(stage.drawPile).toEqual([num(4), num(4)]);
+    expect(stage.drawPile).toEqual([num(4), num(4), num(2)]);
     expect(stage.discardPile).toEqual([num(5), unstable, num(3)]);
 
     // cast 2: draw 4, 4, then release
@@ -221,8 +221,73 @@ describe("a stage over several casts", () => {
     expect(stage.totalDamage).toBe(84 + 52);
     expect(stage.castsRemaining).toBe(2);
     expect(stage.castNumber).toBe(3);
-    expect(stage.drawPile).toEqual([]);
+    expect(stage.drawPile).toEqual([num(2)]);
     expect(stage.discardPile).toHaveLength(5);
     expect(stage.status).toBe("ready");
+  });
+});
+
+describe("reshuffling the discard pile", () => {
+  // power 8 × 2 = 16, Staff +20, Fire +20, Pierce ×1.5 = 84
+  const spent = [num(5), unstable, num(3)];
+
+  it("shuffles the discard pile into the draw pile when a cast empties it", () => {
+    const state = makeState({
+      channel: spent,
+      discardPile: [num(1), num(2)],
+      drawPile: [],
+    });
+    const next = release(state).nextState;
+
+    expect(next.status).toBe("ready");
+    expect(next.discardPile).toEqual([]);
+    expect(next.drawPile).toHaveLength(5);
+    expect(next.drawPile).toEqual(expect.arrayContaining([...spent, num(1), num(2)]));
+    expect(next.seed).not.toBe(state.seed);
+    expect(canDraw(next)).toBe(true);
+  });
+
+  it("is repeatable for the same seed", () => {
+    const state = makeState({ channel: spent, drawPile: [] });
+
+    expect(release(state).nextState.drawPile).toEqual(release(state).nextState.drawPile);
+  });
+
+  it("leaves the piles alone while the draw pile still has cards", () => {
+    const state = makeState({ channel: spent, drawPile: [num(1)] });
+    const next = release(state).nextState;
+
+    expect(next.drawPile).toEqual([num(1)]);
+    expect(next.discardPile).toEqual(spent);
+  });
+
+  it("does not reshuffle once the stage is cleared or failed", () => {
+    const cleared = release(makeState({ targetHp: 84, channel: spent, drawPile: [] })).nextState;
+    const failed = release(
+      makeState({ targetHp: 1000, castsRemaining: 1, channel: spent, drawPile: [] }),
+    ).nextState;
+
+    expect(cleared.status).toBe("cleared");
+    expect(cleared.drawPile).toEqual([]);
+    expect(cleared.discardPile).toEqual(spent);
+    expect(failed.status).toBe("failed");
+    expect(failed.drawPile).toEqual([]);
+    expect(failed.discardPile).toEqual(spent);
+  });
+
+  it("never leaves a running stage with nothing to draw, even with a small deck", () => {
+    let stage = createStage({ ...config, hp: 100000 }, [num(1), num(2), num(3)], 7);
+
+    for (let cast = 0; cast < 4; cast++) {
+      expect(canDraw(stage)).toBe(true);
+
+      while (canDraw(stage) && !shouldAutoRelease(stage)) {
+        stage = drawIntoChannel(stage).nextState;
+      }
+
+      stage = release(stage).nextState;
+    }
+
+    expect(stage.status).toBe("failed");
   });
 });

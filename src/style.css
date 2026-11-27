@@ -1,48 +1,13 @@
-/* Minimal styles for the text prototype. Mobile-first. */
+/* Base styles for the text prototype. Mobile-first.
+   Colors, type sizes, spacing, shape and motion are tokens in ui/styles/tokens.css;
+   the fixed layout of the screens is in ui/styles/stage-layout.css and the Phase 4
+   components are in ui/styles/components.css. */
 
 :root {
-  --text: #1f2933;
-  --muted: #6b7280;
-  --bg: #ffffff;
-  --panel: #f3f4f6;
-  --border: #d1d5db;
-  --accent: #7c3aed;
-  --win: #15803d;
-  --lose: #b91c1c;
-  --channel-value-bg: #dbeafe;
-  --channel-value-border: #3b82f6;
-  --channel-value-text: #1e3a8a;
-  --channel-unstable-bg: linear-gradient(135deg, #d4d4d8, #fafafa 48%, #a1a1aa);
-  --channel-unstable-border: #a1a1aa;
-  --channel-unstable-text: #3f3f46;
-  --backfire-border: #dc2626;
-
-  --mono: ui-monospace, "SF Mono", Consolas, monospace;
-
   color-scheme: light dark;
   font: 16px/1.45 var(--mono);
   color: var(--text);
   background: var(--bg);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --text: #e5e7eb;
-    --muted: #9ca3af;
-    --bg: #16171d;
-    --panel: #1f2028;
-    --border: #2e303a;
-    --accent: #c084fc;
-    --win: #4ade80;
-    --lose: #f87171;
-    --channel-value-bg: #172554;
-    --channel-value-border: #60a5fa;
-    --channel-value-text: #bfdbfe;
-    --channel-unstable-bg: linear-gradient(135deg, #52525b, #a1a1aa 48%, #3f3f46);
-    --channel-unstable-border: #a1a1aa;
-    --channel-unstable-text: #18181b;
-    --backfire-border: #ef4444;
-  }
 }
 
 body {
@@ -52,18 +17,22 @@ body {
 #app {
   max-width: 480px;
   margin: 0 auto;
-  padding: 16px;
+  padding:
+    max(var(--space-4), var(--safe-top))
+    max(var(--space-4), var(--safe-right))
+    max(var(--space-4), var(--safe-bottom))
+    max(var(--space-4), var(--safe-left));
   box-sizing: border-box;
 }
 
 h1 {
   margin: 0;
-  font-size: 24px;
+  font-size: var(--font-title);
 }
 
 h2 {
-  margin: 0 0 4px;
-  font-size: 14px;
+  margin: 0 0 var(--space-1);
+  font-size: var(--font-md);
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: var(--muted);
@@ -75,15 +44,15 @@ p {
 
 .muted {
   color: var(--muted);
-  font-size: 13px;
+  font-size: var(--font-sm);
 }
 
 .panel {
-  margin-top: 12px;
-  padding: 10px 12px;
+  margin-top: var(--space-3);
+  padding: var(--space-2) var(--space-3);
   background: var(--panel);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius);
 }
 
 .channel-panel.backfire {
@@ -91,44 +60,14 @@ p {
   box-shadow: 0 0 0 1px var(--backfire-border);
 }
 
-.channel-cards {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 8px;
-}
-
-.channel-card {
-  display: grid;
-  place-items: center;
-  min-width: 48px;
-  min-height: 48px;
-  padding: 4px 10px;
-  border: 1px solid;
-  border-radius: 6px;
-  font-weight: bold;
-}
-
-.channel-card.number {
-  color: var(--channel-value-text);
-  background: var(--channel-value-bg);
-  border-color: var(--channel-value-border);
-}
-
-.channel-card.unstable {
-  color: var(--channel-unstable-text);
-  background: var(--channel-unstable-bg);
-  border-color: var(--channel-unstable-border);
-}
-
 .channel-stats {
-  margin-top: 8px;
+  margin-top: var(--space-2);
 }
 
 .damage-meter {
   display: grid;
-  gap: 4px;
-  margin: 4px 0;
+  gap: var(--space-1);
+  margin: var(--space-1) 0;
 }
 
 .damage-meter meter {
@@ -143,35 +82,25 @@ pre {
   white-space: pre-wrap;
 }
 
-.banner {
-  margin-top: 12px;
-  font-weight: bold;
-}
-
-.banner.win {
-  color: var(--win);
-}
-
-.banner.lose {
-  color: var(--lose);
-}
-
 .slots,
 .choices {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  margin-top: 8px;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
 }
 
+/* Card buttons: the loadout slots, the reward and shop options, and the element rows
+   (which add their own color in components.css). */
 .slot,
-.choice {
+.choice,
+.element-row {
   display: flex;
   flex: none;
   flex-direction: column;
   align-items: flex-start;
-  min-height: 0;
-  padding: 8px 10px;
+  min-height: var(--tap-min);
+  padding: var(--space-2) var(--space-3);
   text-align: left;
   font-weight: normal;
   color: var(--text);
@@ -184,11 +113,13 @@ pre {
 }
 
 .slot-text {
-  font-size: 13px;
+  font-size: var(--font-sm);
   color: var(--muted);
 }
 
+/* the first slot picked for a swap */
 .slot.selected {
+  background: color-mix(in srgb, var(--accent) 14%, var(--bg));
   border-color: var(--accent);
   outline: 2px solid var(--accent);
 }
@@ -201,18 +132,27 @@ pre {
   opacity: 0.4;
 }
 
+/* a pointer over a card button that can be used (touch screens have no hover) */
+@media (hover: hover) {
+  .slot:not(:disabled):not(.selected):hover,
+  .choice:not(:disabled):hover {
+    background: var(--hover-tint);
+    border-color: var(--accent);
+  }
+}
+
 button.small {
   flex: none;
-  min-height: 36px;
-  margin-top: 8px;
-  padding: 0 14px;
-  font-size: 14px;
+  min-height: var(--tap-min);
+  margin-top: var(--space-2);
+  padding: 0 var(--space-4);
+  font-size: var(--font-md);
 }
 
 .actions {
   display: flex;
-  gap: 8px;
-  margin-top: 12px;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
 }
 
 button {
@@ -223,8 +163,16 @@ button {
   color: var(--bg);
   background: var(--accent);
   border: 0;
-  border-radius: 6px;
+  border-radius: var(--radius);
   cursor: pointer;
+  touch-action: manipulation; /* no double-tap zoom delay on any button */
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    background-color var(--ease-quick),
+    border-color var(--ease-quick),
+    color var(--ease-quick),
+    filter var(--ease-quick),
+    transform var(--ease-quick);
 }
 
 button:disabled {
@@ -232,12 +180,40 @@ button:disabled {
   cursor: not-allowed;
 }
 
+@media (hover: hover) {
+  button.small:not(:disabled):hover {
+    filter: brightness(1.1);
+  }
+}
+
+/* a ring for keyboard focus, on every button and on the scrolling log */
+button:focus-visible,
+.log:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: 2px;
+}
+
 .log {
-  margin-top: 12px;
-  padding: 10px 12px;
+  margin: var(--space-3) 0 0;
+  padding: var(--space-2) var(--space-3);
   height: 260px;
   overflow-y: auto;
-  font-size: 14px;
+  list-style: none;
+  font-size: var(--font-md);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius);
+}
+
+.log li {
+  overflow-wrap: anywhere;
+}
+
+.log li + li {
+  margin-top: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  button {
+    transition: none;
+  }
 }
