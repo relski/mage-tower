@@ -14,6 +14,8 @@ mage-tower/
 ├─ index.html
 ├─ package.json
 ├─ tsconfig.json
+├─ vite.config.ts             base "./", so the build works from a subfolder
+├─ .github/workflows/deploy.yml   tests, builds and deploys to GitHub Pages on every push to main
 └─ src/
    ├─ main.ts                 entry point, resumes a saved run and mounts the app
    ├─ style.css               styles for the text prototype
@@ -317,6 +319,7 @@ UI rules for this screen:
 - TypeScript in strict mode
 - Vitest for tests
 - Plain CSS for the text prototype, with vanilla TypeScript for the UI
+- GitHub Pages for hosting: `.github/workflows/deploy.yml` runs the tests and the build on every push to `main` and publishes `dist/` at `https://relski.github.io/mage-tower/`. `vite.config.ts` sets `base: "./"` (relative URLs), so the site works from that subfolder. In the repo's settings, Pages must be set to deploy from GitHub Actions.
 
 ## First test cases
 

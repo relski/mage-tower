@@ -283,7 +283,7 @@ The pick, reward, shop and lost screens use the same one-screen layout, with no 
 - **Structure:** a pure-logic game core with no UI dependencies (cards, channel, loadout, scoring, stage state, rewards, shop), and a separate UI layer. The core can then be unit-tested without rendering.
 - **First UI:** a plain text UI in the page for fast feedback. Real UI and animation come after the loop feels good.
 - **Rendering:** DOM and CSS, since the game is mostly cards, text, and number animation.
-- **Tooling:** Vite for the dev server and build, and Vitest for tests.
+- **Tooling:** Vite for the dev server and build, Vitest for tests, and GitHub Pages for hosting (a GitHub Actions workflow tests, builds and deploys on every push to `main`).
 - **Data-driven content:** cards defined as data (TypeScript objects) with effect hooks, so adding a card does not mean rewriting the engine.
 - **More detail:** see [architecture.md](./architecture.md) for the folder structure and code conventions.
 
