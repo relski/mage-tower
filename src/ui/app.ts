@@ -19,6 +19,7 @@ import { playCast } from "./animation/cast-playback";
 import type { CastPlayback } from "./animation/cast-playback";
 import { castTimeline, drainDamage } from "./animation/cast-timeline";
 import type { DrainFrame } from "./animation/cast-timeline";
+import { playSound, toggleMuted, unlockAudio } from "./audio/sound";
 import { hpLabel } from "./components/enemy-panel";
 import { DEFAULT_TAB, isTabName } from "./components/tab-section";
 import type { TabName } from "./components/tab-section";
@@ -95,15 +96,31 @@ export function mountApp(root: HTMLElement): void {
     }
   };
 
+  // the sound for a cast that ended the stage or the run (nothing when it did neither)
+  const playOutcome = (game: Game): void => {
+    const status = game.stage?.status;
+
+    if (status === "failed") {
+      playSound("lost");
+    } else if (status === "cleared") {
+      playSound("clear");
+    }
+  };
+
   // each trace step re-renders the enemy picture with the new total (which restarts its pop),
-  // then the meter drains, then the real game is shown
-  const beginPlayback = (report: CastReport): CastPlayback =>
-    playCast(castTimeline(report.trace, report.damageBefore, report.damageAfter), {
+  // then the meter drains, then the real game is shown. Each step also sounds a little higher.
+  const beginPlayback = (report: CastReport): CastPlayback => {
+    let steps = 0;
+
+    return playCast(castTimeline(report.trace, report.damageBefore, report.damageAfter), {
       onStep: (frame) => {
+        playSound("step", Math.min(2, 1 + steps * 0.08));
+        steps += 1;
         castView = { total: frame.total, text: `${frame.source}: ${frame.description}`, hit: false };
         render();
       },
       onDrainStart: () => {
+        playSound("hit");
         castView = { total: report.score, text: "Damage dealt", hit: true };
         render();
       },
@@ -111,9 +128,11 @@ export function mountApp(root: HTMLElement): void {
       onDone: () => {
         playback = null;
         castView = null;
+        playOutcome(getGame());
         render();
       },
     });
+  };
 
   const clearBackfirePreview = (): void => {
     if (backfireTimeout !== null) {
@@ -137,6 +156,10 @@ export function mountApp(root: HTMLElement): void {
       if (!report.backfired && !reducedMotion()) {
         playback = { report, runner: null };
         started = report;
+      } else if (!report.backfired) {
+        // no animation (reduced motion), so the hit and the result are heard right away
+        playSound("hit");
+        playOutcome(current);
       }
     }
 
@@ -185,6 +208,9 @@ export function mountApp(root: HTMLElement): void {
   };
 
   root.addEventListener("click", (event) => {
+    // browsers only start audio after a tap
+    unlockAudio();
+
     // while a cast plays, any tap skips the animation and does nothing else
     if (playback !== null) {
       playback.runner?.skip();
@@ -198,11 +224,11 @@ export function mountApp(root: HTMLElement): void {
       return;
     }
 
-    // any other button closes the menu
+    // any other button closes the menu (the sound switch keeps it open, to show its new state)
     const action = button.dataset.action;
     const menuWasOpen = menuOpen;
 
-    if (action !== "menu") {
+    if (action !== "menu" && action !== "mute") {
       menuOpen = false;
     }
 
@@ -211,11 +237,18 @@ export function mountApp(root: HTMLElement): void {
         menuOpen = !menuOpen;
         render();
         break;
+      case "mute":
+        // the tap is heard only when sound has just been turned on
+        toggleMuted();
+        playSound("tap");
+        render();
+        break;
       case "tab": {
         const tab = button.dataset.tab;
 
         if (isTabName(tab)) {
           activeTab = tab;
+          playSound("tap");
           render();
         }
         break;
@@ -225,12 +258,14 @@ export function mountApp(root: HTMLElement): void {
 
         if (isShopTab(tab)) {
           shopTab = tab;
+          playSound("tap");
           render();
         }
         break;
       }
       case "pick":
         activeTab = DEFAULT_TAB;
+        playSound("tap");
         pick(button.dataset.id ?? "");
         break;
       case "draw": {
@@ -242,6 +277,18 @@ export function mountApp(root: HTMLElement): void {
         // the game state remembers a backfired channel; the UI only shows it for a moment
         const after = getGame();
         const failedChannel = after !== before ? after.lastBackfire : null;
+
+        if (after !== before) {
+          const channel = after.stage?.channel ?? [];
+
+          if (failedChannel !== null) {
+            playSound("backfire");
+          } else if (channel[channel.length - 1]?.kind === "unstable") {
+            playSound("unstable");
+          } else {
+            playSound("draw");
+          }
+        }
 
         if (failedChannel !== null) {
           clearBackfirePreview();
@@ -265,8 +312,10 @@ export function mountApp(root: HTMLElement): void {
         // a modifier or an item asks first; the other rewards are taken right away
         if (getGame().rewardOptions[index]?.kind === "card") {
           confirmReward = index;
+          playSound("tap");
           render();
         } else {
+          playSound("place");
           chooseReward(index);
         }
         break;
@@ -277,19 +326,29 @@ export function mountApp(root: HTMLElement): void {
         confirmReward = null;
 
         if (index !== null) {
+          playSound("place");
           chooseReward(index);
         }
         break;
       }
       case "cancel-reward":
         confirmReward = null;
+        playSound("tap");
         render();
         break;
       case "skip":
+        playSound("tap");
         skipReward();
         break;
-      case "buy":
+      case "buy": {
+        const goldBefore = getGame().gold;
+
         buy(Number(button.dataset.index));
+
+        // only a purchase that went through is heard
+        if (getGame().gold < goldBefore) {
+          playSound("coin");
+        }
 
         // a bought card has to be placed in the loadout
         if (getGame().pendingCard !== null) {
@@ -297,12 +356,15 @@ export function mountApp(root: HTMLElement): void {
           render();
         }
         break;
+      }
       case "cancel":
+        playSound("tap");
         cancelPending();
         shopTab = DEFAULT_SHOP_TAB;
         render();
         break;
       case "next":
+        playSound("tap");
         activeTab = DEFAULT_TAB;
         shopTab = DEFAULT_SHOP_TAB;
         nextStage();
@@ -314,14 +376,24 @@ export function mountApp(root: HTMLElement): void {
 
         // after a card is placed, go back to buying
         if (wasPlacing && getGame().pendingCard === null) {
+          playSound("place");
           shopTab = DEFAULT_SHOP_TAB;
           render();
+        } else {
+          playSound("tap");
         }
         break;
       }
-      case "sell":
+      case "sell": {
+        const goldBefore = getGame().gold;
+
         sellCard(Number(button.dataset.slot));
+
+        if (getGame().gold > goldBefore) {
+          playSound("coin");
+        }
         break;
+      }
       case "restart":
         activeTab = DEFAULT_TAB;
         shopTab = DEFAULT_SHOP_TAB;

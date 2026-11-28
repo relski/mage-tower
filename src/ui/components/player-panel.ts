@@ -1,9 +1,11 @@
 import type { Game } from "../../state/game";
+import { isMuted } from "../audio/sound";
 import { escapeHtml } from "../html";
 import { elementIcon, icon } from "../icons";
 
 // The player panel: one row with the chosen element (icon and name, tinted by the element),
-// gold (coin icon and number), and a menu button. The menu holds the seed and Abandon run.
+// gold (coin icon and number), and a menu button. The menu holds the seed, the sound switch
+// and Abandon run.
 export function playerPanel(game: Game, menuOpen: boolean): string {
   const element = game.element;
   const chip =
@@ -20,6 +22,7 @@ export function playerPanel(game: Game, menuOpen: boolean): string {
     ? `
       <div class="game-menu" id="game-menu">
         <p class="muted">Seed ${game.startSeed}</p>
+        <button class="small" data-action="mute" aria-pressed="${isMuted()}">Sound: ${isMuted() ? "off" : "on"}</button>
         ${abandon}
       </div>`
     : "";

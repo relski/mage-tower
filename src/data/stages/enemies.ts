@@ -9,7 +9,7 @@ export const goblinScout: StageConfig = {
 };
 
 export const stoneOgre: StageConfig = {
-  name: "Stone Ogre",
+  name: "Stone Golem",
   hp: { minValue: 280, maxValue: 320 },
   hpGrowthPerRound: { minValue: 30, maxValue: 40 },
   casts: 4,

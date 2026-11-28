@@ -24,7 +24,7 @@ mage-tower/
    │  ├─ rules.ts             getChannelRules (defaults + element + loadout + stage rule) and describeRule
    │  ├─ scoring.ts           resolveCast: channel result + fixed element + loadout → score + trace
    │  ├─ round.ts             stage state machine: createStage, canDraw, drawIntoChannel, releaseCast
-   │  ├─ loadout.ts           starting loadout, slot swapping, SLOT_COUNT
+   │  ├─ loadout.ts           starting loadout, slot swapping, cardsInEffectOrder (the loadout with the element between slots 1 and 2), SLOT_COUNT
    │  ├─ run.ts               rewards, shop offers, deck changes, placing cards, gold for a stage
    │  ├─ rng.ts               seeded random generator: nextRandom, randomInteger, shuffle, pickRandom
    │  ├─ test-helpers.ts      makeState, num, unstable (tests only)
@@ -36,7 +36,7 @@ mage-tower/
    │  │  ├─ items.ts          the 10 items and the ITEMS list
    │  │  └─ cards.test.ts, more-cards.test.ts   card behavior tests
    │  ├─ stages/
-   │  │  ├─ enemies.ts        goblin scout, stone ogre
+   │  │  ├─ enemies.ts        goblin scout, stone golem
    │  │  ├─ bosses.ts         tower warden and the BOSS_RULES pool
    │  │  └─ rounds.ts         ROUND_STAGES: the three stages repeated each round
    │  ├─ channel-deck.ts      createStartingDeck (14 numbers, 6 Unstable)
@@ -51,7 +51,7 @@ mage-tower/
       ├─ app.ts               mounts the app, keeps the UI-only state and the cast playback, turns clicks into store calls
       ├─ html.ts              escapeHtml (safe in text and in quoted attributes), used by every view
       ├─ icons.ts             inline SVG icons (the elements, coin, menu, the log, enemy and loadout tabs, the shop's buy and sell tabs, the Unstable warning)
-      ├─ enemy-art.ts         placeholder line drawings of the enemies, looked up by enemy name
+      ├─ enemy-art.ts         imported enemy illustrations, looked up by stage name, with a generic face fallback
       ├─ ui-state.ts          UiState: the UI-only state (menu, tabs, backfire preview, cast animation, reward confirmation) the views are given
       ├─ screens/
       │  ├─ screen-shell.ts   the frame of the pick, reward and shop screens: fixed top, scrolling body, pinned buttons
@@ -60,7 +60,7 @@ mage-tower/
       │  ├─ shop-screen.ts    Buy, Sell and Loadout tabs, with Next stage (or Begin Round) pinned
       │  └─ stage-screen.ts   the stage screen in four regions (player panel, tab section, channel, buttons), built from the panels below
       ├─ components/          the panels of the screens, one per file
-      │  ├─ player-panel.ts   one row: element chip, gold, and the menu (seed, Abandon run)
+      │  ├─ player-panel.ts   one row: element chip, gold, and the menu (seed, sound switch, Abandon run)
       │  ├─ tab-section.ts    three icon tabs (combat log, enemy, loadout) above the selected tab's content
       │  ├─ enemy-panel.ts    the enemy tab: picture, name, round and stage, HP meter, boss rule
       │  ├─ lost-panel.ts     where the run ended (shown on the stage screen after a loss)
@@ -73,8 +73,10 @@ mage-tower/
       │  ├─ cast-timeline.ts  castTimeline: a cast's trace as frames with durations (pure), plus drainDamage
       │  ├─ cast-timeline.test.ts
       │  └─ cast-playback.ts  playCast: runs the frames with timers and requestAnimationFrame, can be skipped
+      ├─ audio/
+      │  └─ sound.ts          sound effects made with the Web Audio API (no sound files yet): playSound, unlockAudio, the mute switch
       └─ styles/
-         ├─ tokens.css        design tokens: colors (light and dark; element, card kind and warning colors), type scale, spacing, radius, shadow, motion, tap size, safe areas
+         ├─ tokens.css        design tokens: colors (light and dark; element, card kind, gold and warning colors), type scale, spacing, radius, shadow, motion, tap size, safe areas
          ├─ stage-layout.css  the fixed-height layout of the stage screen
          └─ components.css    styles for the Phase 4 components: icons, player panel and menu, tabs, enemy tab, pick screen element cards, channel panel, action bar, cast animation
 ```
@@ -210,7 +212,7 @@ pick ──applyPick──▶ stage ──clear (not boss)──▶ reward ─�
 
 - **pick:** choose the immutable element. `applyPick` stores it outside the loadout, picks a random modifier and item for slots 2 and 1 respectively, and starts the first stage.
 - **stage:** `applyDraw` and `applyRelease` play the casts (with auto-release). A draw that backfires also records the channel in `Game.lastBackfire`, which the UI shows briefly (it never recomputes the rules); a manual release clears it. Every release (manual, or the automatic one at 5 cards or a backfire) records a `CastReport` in `Game.lastCast` for the cast animation. Each stage start rolls HP from its configured range and adds seeded growth for later rounds. Clearing any stage pays gold; clearing a non-boss stage also creates the reward options.
-- **reward:** `applyChooseReward` or `applySkipReward`. A card reward becomes a `pendingCard` that waits for a slot.
+- **reward:** `applyChooseReward` or `applySkipReward`. A card reward goes into the first empty unlocked slot right away. Only when every unlocked slot is full does it become a `pendingCard` that waits for the player to pick the slot to replace.
 - **shop:** `applyBuy` and `applySellCard` handle purchases and sales; then `applyNextStage` starts the next stage with the run's deck. Any modifier or item in an unlocked slot sells for 5 gold. Clearing the boss opens the shop again before the next round.
 - **Slots:** `applySelectSlot` places a pending card (into an unlocked slot) or swaps two slots. Swapping is only allowed on the stage, reward and shop screens, and on the stage screen only while the channel is empty.
 - **lost:** `restart` starts a new game.
@@ -235,7 +237,7 @@ A run in progress is saved to localStorage under the key `mage-tower:save` after
 
 Every screen fits the screen height. `app.ts` puts a `fit-screen` class on `#app`, and `stage-layout.css` sizes `#app` to `100dvh` with no page scroll. Each screen is a grid with a fixed top, a middle that scrolls inside itself, and the buttons pinned at the bottom. On the stage screen the grid has four regions: the top (the player panel), the tab section (the selected tab's content, `.tab-body`, is the part that scrolls), the channel (the channel panel), and the buttons. The pick, reward and shop screens use `screenShell` (top, `.screen-body`, optional buttons). The part that scrolls has a `data-scroll-key`, and `app.ts` keeps its scroll position across re-renders as long as the key is the same (it changes with the tab or the screen content).
 
-No screen has a page header. The stage, reward and shop screens have the player panel as their top row, and the pick screen has a title block with the seed. The menu button in the player panel opens a small menu with the run's seed and Abandon run (not on a lost run). Whether the menu is open is UI state (`menuOpen` in `mountApp`), never saved, and any other button closes it.
+No screen has a page header. The stage, reward and shop screens have the player panel as their top row, and the pick screen has a title block with the seed. The menu button in the player panel opens a small menu with the run's seed, the sound switch and Abandon run (not on a lost run). Whether the menu is open is UI state (`menuOpen` in `mountApp`), never saved, and any other button closes it (the sound switch keeps it open, to show its new state).
 
 The selected tab is UI state too (`activeTab` in `mountApp`), never saved. It starts on the Enemy tab (`DEFAULT_TAB` in `tab-section.ts`) and goes back to it after a draw or a release and when a stage starts. Selecting or swapping loadout slots does not reset it, because a swap takes two taps on the Loadout tab. Each tab is an icon-only button, so it has an `aria-label` and a title.
 
@@ -268,6 +270,16 @@ When a cast is released (by the Release button, or by the automatic release at 5
 - **Locked, and skippable.** While it plays, Draw, Release and the loadout slots are off (`isLocked` in `ui-state.ts`), and any tap anywhere skips the animation and does nothing else. The Enemy tab is the one showing, because a draw or release resets the tab to it.
 - **No animation for a backfire** (the red channel panel shows for 2 seconds instead). With `prefers-reduced-motion: reduce` the animation is skipped completely, and the CSS animations are disabled too.
 - The log still gets every trace step as text.
+
+### Sound
+
+`ui/audio/sound.ts` plays the sound effects. It uses the Web Audio API and builds every sound from a few short tones, so there are no sound files yet; a recorded file can replace a sound later by changing only the inside of `playSound`. `playSound(name, rate)` takes a `SoundName` and a pitch multiplier, and quietly does nothing when sound is muted, the browser has no audio, or audio has not been unlocked yet.
+
+- **Unlocking.** Browsers start audio only after a tap, so the click listener in `mountApp` calls `unlockAudio()` first, even before the "any tap skips the animation" check.
+- **Played at the moment of the event, never from `render`** (which runs far more often than things happen). The click handler plays the draw, Unstable and backfire sounds, buying and selling, reward and slot placing, and light taps. The cast playback handlers play each step, the hit, and then the clear or lost sound when the animation ends or is skipped. The one exception is the reduced-motion path, which has no animation, so `render` plays the hit and the result once per cast report, the same way it starts the animation.
+- **Rising steps.** Each trace step of a cast sounds a little higher than the last (`1 + steps * 0.08`, at most one octave up).
+- **Mute.** The player's choice is kept under `mage-tower:muted` in localStorage, separate from the run's save so abandoning a run keeps it. The menu's Sound button switches it. Like saving, it never throws when storage is missing or blocked.
+- It has no tests, since it needs a browser.
 
 ### Stage screen (Phase 4)
 

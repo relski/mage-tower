@@ -1,6 +1,6 @@
 # Mage Tower: Prototype Project Document
 
-Working title. Browser game, TypeScript, mobile-first. Draft v0.9, November 27, 2026.
+Working title. Browser game, TypeScript, mobile-first. Draft v0.9, November 28, 2026.
 
 Version history:
 
@@ -21,7 +21,11 @@ Version history:
 - v0.6 fixes the portrait layout of the stage screen for Phase 4 (see Prototype scope): a one-row player panel, one tab section (combat log, enemy view, loadout) that returns to the enemy view after every action, the channel panel, and the Draw and Release buttons.
 - v0.7 adds the cast animation (see Prototype scope): releasing a cast plays its trace on the enemy view, then drains the enemy's HP.
 - v0.8 gives the pick, reward, shop and lost screens the same look and one-screen layout as the stage screen (see Prototype scope).
-- v0.9 is the styling pass: shared card styling, a Modifier or Item badge on loadout cards, hover and keyboard focus states, and the type scale and motion as design tokens.
+- v0.9 is the styling pass: shared card styling, a Modifier or Item badge on loadout cards, hover and keyboard focus states, and the type scale and motion as design tokens. It also changes the loadout and the reward flow:
+  - The loadout tab no longer shows the element row. The element is shown only in the player panel (its description is on the pick screen), and it still scores between slots 1 and 2.
+  - Taking a modifier or item reward asks first, with a Yes or No popup. Deck changes are still taken with one tap.
+  - A confirmed card reward goes into the first empty unlocked slot. It waits for the player to choose a slot only when every unlocked slot is full.
+  - Adds sound effects, generated in the browser (no sound files yet): drawing, an Unstable draw, a backfire, each step of the cast animation (rising in pitch), the hit, clearing a stage, losing, and buying, selling and placing cards. A Sound on/off switch in the menu is remembered between visits.
 
 ## 1. Pitch
 
@@ -73,7 +77,7 @@ A round has three stages, four casts each. The same wave repeats after the boss 
 | Stage | Enemy | Starting HP | HP added per later round | Rule |
 | --- | --- | --- | --- | --- |
 | 1 | Goblin Scout (easy mob) | 230–270 | 20–30 | none |
-| 2 | Stone Ogre (medium enemy) | 280–320 | 30–40 | none |
+| 2 | Stone Golem (medium enemy) | 280–320 | 30–40 | none |
 | 3 | Tower Warden (round boss) | 450–550 | 50–75 | one seeded random boss rule |
 
 HP is rolled when each stage starts. Each later round adds a new seeded random increase from that stage's growth range. Dealing damage equal to the enemy's HP before running out of casts clears the stage; running out of casts ends the run. Clearing the boss opens a shop; leaving it starts the next round at stage 1. HP ranges and growth values are placeholders to tune with playtests.
@@ -195,7 +199,7 @@ When the boss stage starts, the seeded RNG chooses one rule from the boss rule p
 - a random modifier and a random item (preferring cards not already in the loadout), or
 - one change to the channel deck: add a number card (6 to 9), remove the lowest number card, or remove an Unstable card.
 
-A card reward is held until the player clicks an unlocked slot, and it replaces whatever is in that slot. The player can cancel and pick something else.
+Taking a modifier or item reward asks first, with a Yes or No popup. A confirmed card goes into the first empty unlocked slot. Only when every unlocked slot is full is it held until the player clicks a slot, and it replaces whatever is in that slot; the player can cancel and pick something else.
 
 **Shop.** After a normal-stage reward pick, and again after defeating the boss before the next round, the shop offers:
 
@@ -234,12 +238,13 @@ These replace the v0.1 reference round, and they depend on Fire, Pierce and Crac
 - Sell any modifier or item in an unlocked loadout slot for 5 gold in the shop
 - Reorder loadout cards by clicking two slots
 - Autosave of the run in progress to localStorage, resumed when the page loads; an Abandon run button to start over
+- Sound effects for the main actions, with a mute switch
 - Text UI first, then a real mobile UI with cast animation (number popups and a running total)
 
 **Out of scope for now**
 
 - Potions, meta-progression, and memory fragments
-- Tower story content and audio polish
+- Tower story content, music and recorded sound files (the current sound effects are generated)
 - Suits, special effects, or upgrades on channel cards
 - Enemy element affinities
 - Save system beyond the current run
@@ -248,7 +253,7 @@ These replace the v0.1 reference round, and they depend on Fire, Pierce and Crac
 
 The stage screen is built for a portrait phone and must fit on one screen without scrolling the page. From top to bottom:
 
-- **Player panel (one row):** the chosen element (icon and name) and gold (coin icon and number), with a menu button at the end for Abandon run.
+- **Player panel (one row):** the chosen element (icon and name) and gold (coin icon and number), with a menu button at the end (the run's seed, Sound on/off and Abandon run).
 - **Tab section:** three tabs with icons over one content area that takes the remaining height:
   - *Combat log:* the newest 30 lines of the log, newest at the bottom.
   - *Enemy view:* the enemy image, its name, the round and stage, the HP meter with numbers, and the boss rule when there is one.
@@ -260,14 +265,14 @@ The Enemy tab is the default. After every action (a draw or a release) and when 
 
 **Cast animation**
 
-When a cast is released, the Enemy tab plays it. The enemy picture shows the running damage total as a big number that pops at each step of the cast (the channel's power, then every card that changed the total, with a line saying what changed it). Then the enemy shakes and its HP meter drains by the damage dealt. The whole animation takes about three seconds. The screen stays on the stage until it ends, even when the cast clears the stage or ends the run, so the player sees the hit land before the reward, shop or lost screen appears. Draw, Release and the loadout slots are off while it plays, and a tap anywhere skips it. A backfire has no animation (the red channel panel shows instead), and for players who prefer reduced motion the animation is off completely. The combat log always has every step as text.
+When a cast is released, the Enemy tab plays it. The enemy picture shows the running damage total as a big number that pops at each step of the cast (the channel's power, then every card that changed the total, with a line saying what changed it). Then the enemy shakes and its HP meter drains by the damage dealt. The whole animation takes about three seconds. The screen stays on the stage until it ends, even when the cast clears the stage or ends the run, so the player sees the hit land before the reward, shop or lost screen appears. Draw, Release and the loadout slots are off while it plays, and a tap anywhere skips it. A backfire has no animation (the red channel panel shows instead), and for players who prefer reduced motion the animation is off completely. Each step of the cast has a sound that rises in pitch, and the hit, a cleared stage and a lost run have their own. The combat log always has every step as text.
 
 **Other screens**
 
 The pick, reward, shop and lost screens use the same one-screen layout, with no page scrolling, and the same cards and colors:
 
 - **Pick:** the four elements as colored cards, one under the other, each with its description.
-- **Reward:** the player panel (so gold is in view), the reward options, and the loadout. Skip for gold is pinned at the bottom. Once a card reward is chosen, only the loadout is left, with the held card shown above the slots, to place it.
+- **Reward:** the player panel (so gold is in view), the reward options, and the loadout. Skip for gold is pinned at the bottom. Choosing a modifier or item opens a Yes or No popup showing the card, and Yes puts it in the first empty unlocked slot. Only when every unlocked slot is full is the card held, with only the loadout left and the held card shown above the slots, so the player picks the slot to replace.
 - **Shop:** the player panel and three tabs (Buy, Sell, Loadout), with Next stage (or Begin Round) pinned at the bottom. Buying a card opens the Loadout tab to place it, and the shop goes back to Buy afterwards.
 - **Lost:** the stage screen with a panel saying where the run ended, and New game in place of Draw and Release.
 

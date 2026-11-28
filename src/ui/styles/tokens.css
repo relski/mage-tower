@@ -33,6 +33,9 @@
   --type-modifier: #0f766e;
   --type-item: #be185d;
 
+  /* the gold coin icon */
+  --gold: #d4a017;
+
   /* type scale (the page text is 16px) */
   --font-xs: 11px;
   --font-sm: 13px;
@@ -99,6 +102,8 @@
 
     --type-modifier: #2dd4bf;
     --type-item: #f472b6;
+
+    --gold: #fbbf24;
 
     --shadow-raised: 0 4px 12px rgb(0 0 0 / 0.5);
   }
